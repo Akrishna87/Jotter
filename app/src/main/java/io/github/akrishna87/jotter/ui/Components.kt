@@ -57,6 +57,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.akrishna87.jotter.model.Span
@@ -178,16 +183,52 @@ fun Count(n: Int) {
     if (n > 0) Text(n.toString(), Modifier.padding(end = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-/** Inline Markdown runs as styled text. */
-fun styled(spans: List<Span>): AnnotatedString = buildAnnotatedString {
+/** Colours for inline marks: links, highlights and code. */
+@Immutable
+data class Marks(val link: Color, val highlight: Color, val code: Color, val missing: Color)
+
+@Composable
+fun marks(): Marks {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return Marks(
+        link = MaterialTheme.colorScheme.primary,
+        highlight = if (dark) Color(0x66C9A227) else Color(0xFFFFEF9E),
+        code = MaterialTheme.colorScheme.surfaceVariant,
+        missing = MaterialTheme.colorScheme.error,
+    )
+}
+
+/**
+ * Inline Markdown runs as styled text. Web links open in the browser; note links call [onNote]
+ * with their target (`note:<id>` or `title:<title>`).
+ */
+fun styled(spans: List<Span>, marks: Marks? = null, onNote: ((String) -> Unit)? = null): AnnotatedString = buildAnnotatedString {
     for (s in spans) {
-        withStyle(
-            SpanStyle(
-                fontWeight = if (s.bold) FontWeight.Bold else null,
-                fontStyle = if (s.italic) FontStyle.Italic else null,
-                textDecoration = if (s.strike) TextDecoration.LineThrough else null,
-            ),
-        ) { append(s.text) }
+        val decorations = listOfNotNull(
+            if (s.strike) TextDecoration.LineThrough else null,
+            if (s.underline || (s.link != null && marks != null)) TextDecoration.Underline else null,
+        )
+        val style = SpanStyle(
+            fontWeight = if (s.bold) FontWeight.Bold else null,
+            fontStyle = if (s.italic) FontStyle.Italic else null,
+            textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
+            background = when {
+                marks == null -> Color.Unspecified
+                s.highlight -> marks.highlight
+                s.code -> marks.code
+                else -> Color.Unspecified
+            },
+            fontFamily = if (s.code) FontFamily.Monospace else null,
+            color = if (s.link != null && marks != null) marks.link else Color.Unspecified,
+        )
+        val link = s.link
+        when {
+            link == null || marks == null -> withStyle(style) { append(s.text) }
+            link.startsWith("http://") || link.startsWith("https://") || link.startsWith("mailto:") ->
+                withLink(LinkAnnotation.Url(link, TextLinkStyles(style))) { append(s.text) }
+            onNote != null -> withLink(LinkAnnotation.Clickable(link, TextLinkStyles(style)) { onNote(link) }) { append(s.text) }
+            else -> withStyle(style) { append(s.text) }
+        }
     }
 }
 

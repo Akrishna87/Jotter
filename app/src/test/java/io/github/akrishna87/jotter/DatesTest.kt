@@ -19,4 +19,13 @@ class DatesTest {
         assertEquals("20 Sep", Dates.shortDate(millis(LocalDate.of(2026, 9, 20)), today, Locale.ENGLISH, ZoneOffset.UTC))
         assertEquals("5 Jan 2025", Dates.shortDate(millis(LocalDate.of(2025, 1, 5)), today, Locale.ENGLISH, ZoneOffset.UTC))
     }
+
+    @Test
+    fun reminders() {
+        val at = today.atTime(18, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+        assertEquals("Today 18:00", Dates.reminder(at, today, true, Locale.ENGLISH, ZoneOffset.UTC))
+        assertEquals("Tomorrow 6:00 PM", Dates.reminder(at + 86_400_000, today, false, Locale.ENGLISH, ZoneOffset.UTC))
+        assertEquals("Mon 12 Oct 18:00", Dates.reminder(LocalDate.of(2026, 10, 12).atTime(18, 0).toInstant(ZoneOffset.UTC).toEpochMilli(), today, true, Locale.ENGLISH, ZoneOffset.UTC))
+        assertEquals("Saturday 3 October 2026, 18:00", Dates.full(at, true, Locale.ENGLISH, ZoneOffset.UTC))
+    }
 }

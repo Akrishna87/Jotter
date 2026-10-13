@@ -1,114 +1,411 @@
 package io.github.akrishna87.jotter.ui
 
-import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings as AndroidSettings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.Label
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FolderCopy
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.LibraryBooks
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NoteAdd
 import androidx.compose.material.icons.rounded.RestoreFromTrash
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SavedSearch
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.akrishna87.jotter.Backup
 import io.github.akrishna87.jotter.Store
 import io.github.akrishna87.jotter.model.Data
 import io.github.akrishna87.jotter.model.Dates
 import io.github.akrishna87.jotter.model.Markdown
-import io.github.akrishna87.jotter.model.ThemeMode
-import java.time.LocalDate
+import io.github.akrishna87.jotter.model.Notebook
+import io.github.akrishna87.jotter.model.Shortcut
+import io.github.akrishna87.jotter.model.ShortcutKind
+import io.github.akrishna87.jotter.model.Templates
+import io.github.akrishna87.jotter.model.Version
 
-/** Searches note titles, text and tags. */
+/** A shortcut, ready to show: what it's called, its icon, and where it goes. */
+data class ShortcutItem(val key: String, val label: String, val icon: ImageVector, val page: Page)
+
+fun resolveShortcut(s: Shortcut, data: Data): ShortcutItem? {
+    val key = s.kind.name + ":" + s.ref
+    return when (s.kind) {
+        ShortcutKind.NOTE -> data.note(s.ref)?.takeIf { !it.trashed }?.let { ShortcutItem(key, it.title.ifBlank { "Untitled" }, Icons.Rounded.Description, Page.NotePage(it.id)) }
+        ShortcutKind.NOTEBOOK -> data.notebooks.firstOrNull { it.id == s.ref }?.let { ShortcutItem(key, it.name, Icons.Rounded.Book, Page.NoteList(NoteFilter.InNotebook(it.id))) }
+        ShortcutKind.STACK -> data.stacks.firstOrNull { it.equals(s.ref, true) }?.let { ShortcutItem(key, it, Icons.Rounded.LibraryBooks, Page.NoteList(NoteFilter.InStack(it))) }
+        ShortcutKind.TAG -> data.tags.firstOrNull { it.equals(s.ref, true) }?.let { ShortcutItem(key, "#$it", Icons.AutoMirrored.Rounded.Label, Page.NoteList(NoteFilter.Tagged(it))) }
+        ShortcutKind.SEARCH -> data.searches.firstOrNull { it.id == s.ref }?.let { ShortcutItem(key, it.name, Icons.Rounded.SavedSearch, Page.NoteList(NoteFilter.Saved(it.id))) }
+    }
+}
+
+/** Browse: shortcuts, notebooks and stacks, tags, saved searches, reminders, templates, the trash and settings. */
 @Composable
-fun SearchPage(data: Data) {
+fun BrowseScreen(data: Data, padding: PaddingValues) {
     val nav = LocalNav.current
     val today = LocalClock.current.today
-    var query by remember { mutableStateOf(TextFieldValue("")) }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val q = query.text.trim()
-    val notes = if (q.isEmpty()) emptyList() else sortNotes(
-        data.notes.filter { n ->
-            !n.trashed && (n.title.contains(q, true) || n.body.contains(q, true) || n.tags.any { it.contains(q.removePrefix("#"), true) })
-        },
-        data.settings.noteSort,
-    )
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        run {
-            PageBar(onBack = { nav.pop() }, leading = {
-                Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                PlainField(
-                    value = query,
-                    onChange = { query = it },
-                    placeholder = "Search notes",
-                    description = "Search",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(10f).padding(start = 12.dp).focusRequester(focus),
-                    singleLine = true,
-                )
-            }) {
-                if (query.text.isNotEmpty()) {
-                    IconButton(onClick = { query = TextFieldValue("") }, Modifier.semantics { contentDescription = "Clear search" }) { Icon(Icons.Rounded.Close, null) }
-                }
+    var newNotebook by remember { mutableStateOf(false) }
+    val live = data.liveNotes
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 88.dp),
+    ) {
+        item {
+            ScreenHeader("Browse") {
+                SearchAction { nav.push(Page.Search()) }
+                IconButton(onClick = { nav.push(Page.SettingsPage) }, Modifier.semantics { contentDescription = "Settings" }) { Icon(Icons.Rounded.Settings, null) }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
-            if (q.isEmpty()) {
-                item { EmptyState(Icons.Rounded.Search, "Search your notes", "Find notes by title, text or #tag.") }
-            } else if (notes.isEmpty()) {
-                item { EmptyState(Icons.Rounded.Search, "No results", "Nothing matches “$q”.") }
+        val shortcuts = data.shortcuts.mapNotNull { resolveShortcut(it, data) }
+        if (shortcuts.isNotEmpty()) {
+            item { SectionHeader("Shortcuts") }
+            items(shortcuts, key = { "sc-" + it.key }) { s ->
+                ListRow(s.label, leading = { Icon(s.icon, null, tint = MaterialTheme.colorScheme.primary) }, onClick = { nav.push(s.page) })
             }
-            if (notes.isNotEmpty()) {
-                item { SectionHeader("Notes · ${notes.size}") }
-                items(notes, key = { "n-" + it.id }) { n -> NoteRow(n, data, showNotebook = true, today = today) { nav.push(Page.NotePage(n.id)) } }
+        }
+        item {
+            SectionHeader("Notebooks") {
+                IconButton(onClick = { newNotebook = true }, Modifier.semantics { contentDescription = "New notebook" }) { Icon(Icons.Rounded.Add, null) }
+                TextButton(onClick = { nav.push(Page.Notebooks) }) { Text("Manage") }
+            }
+        }
+        item {
+            ListRow("All notes", leading = { Icon(Icons.Rounded.Description, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(live.size) }, onClick = { nav.tab = Tab.NOTES })
+        }
+        for (stack in data.stacks) {
+            item(key = "stack-$stack") { StackRow(stack, data) }
+        }
+        items(data.notebooksIn(null), key = { "nb-" + it.id }) { nb -> NotebookRow(nb, data, indent = false) }
+        item { SectionHeader("Tags") { TextButton(onClick = { nav.push(Page.Tags) }) { Text("Manage") } } }
+        if (data.tags.isEmpty()) {
+            item { Text("Tag notes to find them across notebooks.", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(data.childrenOf(null), key = { "tag-$it" }) { t ->
+            ListRow("#$t", leading = { Icon(Icons.AutoMirrored.Rounded.Label, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(notesFor(NoteFilter.Tagged(t), data, today).size) }, onClick = { nav.push(Page.NoteList(NoteFilter.Tagged(t))) })
+        }
+        if (data.searches.isNotEmpty()) {
+            item { SectionHeader("Saved searches") }
+            items(data.searches, key = { "s-" + it.id }) { s ->
+                ListRow(s.name, detail = s.query, leading = { Icon(Icons.Rounded.SavedSearch, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = { nav.push(Page.NoteList(NoteFilter.Saved(s.id))) })
+            }
+        }
+        item { SectionHeader("More") }
+        item {
+            val n = live.count { it.reminderAt != null && it.reminderDone == 0L }
+            ListRow("Reminders", leading = { Icon(Icons.Rounded.Alarm, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(n) }, onClick = { nav.push(Page.RemindersPage) })
+        }
+        item { ListRow("Templates", leading = { Icon(Icons.Rounded.NoteAdd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(Templates.builtIn.size + data.templates.size) }, onClick = { nav.push(Page.TemplatesPage) }) }
+        item { ListRow("Trash", leading = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(data.notes.count { it.trashed }) }, onClick = { nav.push(Page.Trash) }) }
+        item { ListRow("Settings", leading = { Icon(Icons.Rounded.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = { nav.push(Page.SettingsPage) }) }
+    }
+    if (newNotebook) {
+        NameDialog("New notebook", confirm = "Create", onSave = { name, _ -> Store.saveNotebook(Notebook(name = name)) }, onDismiss = { newNotebook = false })
+    }
+}
+
+@Composable
+private fun StackRow(stack: String, data: Data) {
+    val nav = LocalNav.current
+    val today = LocalClock.current.today
+    var open by rememberSaveable(stack) { mutableStateOf(true) }
+    Column {
+        ListRow(
+            stack,
+            leading = { Icon(Icons.Rounded.LibraryBooks, null, tint = MaterialTheme.colorScheme.primary) },
+            trailing = {
+                Count(notesFor(NoteFilter.InStack(stack), data, today).size)
+                IconButton(onClick = { open = !open }, Modifier.semantics { contentDescription = if (open) "Collapse $stack" else "Expand $stack" }) {
+                    Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, null)
+                }
+            },
+            onClick = { nav.push(Page.NoteList(NoteFilter.InStack(stack))) },
+        )
+        if (open) for (nb in data.notebooksIn(stack)) NotebookRow(nb, data, indent = true)
+    }
+}
+
+@Composable
+private fun NotebookRow(nb: Notebook, data: Data, indent: Boolean) {
+    val nav = LocalNav.current
+    ListRow(
+        nb.name,
+        modifier = if (indent) Modifier.padding(start = 24.dp) else Modifier,
+        leading = { Icon(Icons.Rounded.Book, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        detail = if (data.settings.defaultNotebookId == nb.id) "Default notebook" else null,
+        trailing = { Count(data.liveNotes.count { it.notebookId == nb.id }) },
+        onClick = { nav.push(Page.NoteList(NoteFilter.InNotebook(nb.id))) },
+    )
+}
+
+/** Notebooks and stacks: rename, put in a stack, make default, add to shortcuts, delete. */
+@Composable
+fun NotebooksPage(data: Data) {
+    val nav = LocalNav.current
+    var adding by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<Notebook?>(null) }
+    var stacking by remember { mutableStateOf<Notebook?>(null) }
+    var deleting by remember { mutableStateOf<Notebook?>(null) }
+    var renamingStack by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        PageBar("Notebooks", onBack = { nav.pop() }) {
+            IconButton(onClick = { adding = true }, Modifier.semantics { contentDescription = "New notebook" }) { Icon(Icons.Rounded.Add, null) }
+        }
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+            for (stack in data.stacks) {
+                item(key = "s-$stack") {
+                    SectionHeader(stack) {
+                        IconButton(onClick = { renamingStack = stack }, Modifier.semantics { contentDescription = "Rename stack $stack" }) { Icon(Icons.Rounded.Edit, null) }
+                        StarButton(Shortcut(ShortcutKind.STACK, stack), data)
+                    }
+                }
+                items(data.notebooksIn(stack), key = { it.id }) { nb -> ManageNotebookRow(nb, data, { renaming = nb }, { stacking = nb }, { deleting = nb }) }
+            }
+            if (data.stacks.isNotEmpty()) item { SectionHeader("Not in a stack") }
+            items(data.notebooksIn(null), key = { it.id }) { nb -> ManageNotebookRow(nb, data, { renaming = nb }, { stacking = nb }, { deleting = nb }) }
+        }
+    }
+    if (adding) NameDialog("New notebook", confirm = "Create", onSave = { name, _ -> Store.saveNotebook(Notebook(name = name)) }, onDismiss = { adding = false })
+    renaming?.let { nb -> NameDialog("Rename notebook", initial = nb.name, onSave = { name, _ -> Store.saveNotebook(nb.copy(name = name)) }, onDismiss = { renaming = null }) }
+    stacking?.let { nb ->
+        StackDialog(data, nb, onDismiss = { stacking = null })
+    }
+    renamingStack?.let { s ->
+        NameDialog("Rename stack", initial = s, label = "Stack name", onSave = { name, _ -> Store.renameStack(s, name) }, onDismiss = { renamingStack = null })
+    }
+    deleting?.let { nb ->
+        val n = data.liveNotes.count { it.notebookId == nb.id }
+        ConfirmDialog(
+            "Delete “${nb.name}”?",
+            if (n == 0) "It has no notes." else "Its $n note${if (n == 1) "" else "s"} move${if (n == 1) "s" else ""} to the trash, where you can restore them.",
+            "Delete",
+            onConfirm = { Store.deleteNotebook(nb.id) },
+            onDismiss = { deleting = null },
+        )
+    }
+}
+
+@Composable
+private fun StarButton(s: Shortcut, data: Data) {
+    val on = data.isShortcut(s)
+    IconButton(onClick = { Store.toggleShortcut(s) }, Modifier.semantics { contentDescription = if (on) "Remove from shortcuts" else "Add to shortcuts" }) {
+        Icon(if (on) Icons.Rounded.Star else Icons.Outlined.StarOutline, null, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ManageNotebookRow(nb: Notebook, data: Data, onRename: () -> Unit, onStack: () -> Unit, onDelete: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    ListRow(
+        nb.name,
+        leading = { Icon(Icons.Rounded.Book, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        detail = listOfNotNull(
+            data.liveNotes.count { it.notebookId == nb.id }.let { if (it == 1) "1 note" else "$it notes" },
+            if (data.settings.defaultNotebookId == nb.id) "default" else null,
+        ).joinToString(" · "),
+        trailing = {
+            StarButton(Shortcut(ShortcutKind.NOTEBOOK, nb.id), data)
+            Box {
+                IconButton(onClick = { menu = true }, Modifier.semantics { contentDescription = "${nb.name} options" }) { Icon(Icons.Rounded.MoreVert, null) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
+                    DropdownMenuItem(text = { Text(if (nb.stack == null) "Add to stack" else "Change stack") }, leadingIcon = { Icon(Icons.Rounded.FolderCopy, null) }, onClick = { menu = false; onStack() })
+                    if (data.settings.defaultNotebookId != nb.id) {
+                        DropdownMenuItem(text = { Text("Make default notebook") }, onClick = { menu = false; Store.updateSettings { it.copy(defaultNotebookId = nb.id) } })
+                    }
+                    if (data.notebooks.size > 1) {
+                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
+                    }
+                }
+            }
+        },
+    )
+}
+
+/** Puts a notebook in a stack: an existing one, a new one, or none. */
+@Composable
+private fun StackDialog(data: Data, nb: Notebook, onDismiss: () -> Unit) {
+    var newStack by remember { mutableStateOf(false) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Stack for “${nb.name}”") },
+        text = {
+            Column {
+                @Composable
+                fun row(label: String, stack: String?) {
+                    Text(
+                        label + if (nb.stack.equals(stack, true) || (stack == null && nb.stack == null)) "  ✓" else "",
+                        Modifier.fillMaxWidth().clickable { Store.saveNotebook(nb.copy(stack = stack)); onDismiss() }.padding(vertical = 12.dp),
+                    )
+                }
+                row("No stack", null)
+                for (s in data.stacks) row(s, s)
+                Text("New stack…", Modifier.fillMaxWidth().clickable { newStack = true }.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+    if (newStack) {
+        NameDialog("New stack", label = "Stack name", confirm = "Create", onSave = { name, _ -> Store.saveNotebook(nb.copy(stack = name)); onDismiss() }, onDismiss = { newStack = false })
+    }
+}
+
+/** Tags, nested as you arrange them: rename, nest, add to shortcuts, delete. */
+@Composable
+fun TagsPage(data: Data) {
+    val nav = LocalNav.current
+    val today = LocalClock.current.today
+    var adding by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var nesting by remember { mutableStateOf<String?>(null) }
+    var deleting by remember { mutableStateOf<String?>(null) }
+    // The tree, depth first.
+    val rows = remember(data.tags, data.tagInfo) {
+        val out = ArrayList<Pair<String, Int>>()
+        fun add(parent: String?, depth: Int) {
+            for (t in data.childrenOf(parent)) {
+                if (out.any { it.first.equals(t, true) }) continue
+                out += t to depth
+                add(t, depth + 1)
+            }
+        }
+        add(null, 0)
+        out
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        PageBar("Tags", onBack = { nav.pop() }) {
+            IconButton(onClick = { adding = true }, Modifier.semantics { contentDescription = "New tag" }) { Icon(Icons.Rounded.Add, null) }
+        }
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+            if (rows.isEmpty()) item { EmptyState(Icons.AutoMirrored.Rounded.Label, "No tags yet", "Add tags to notes from their options, or make one here.") }
+            items(rows, key = { it.first }) { (t, depth) ->
+                var menu by remember { mutableStateOf(false) }
+                ListRow(
+                    "#$t",
+                    modifier = Modifier.padding(start = (depth * 20).dp),
+                    leading = { Icon(Icons.AutoMirrored.Rounded.Label, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailing = {
+                        Count(notesFor(NoteFilter.Tagged(t), data, today).size)
+                        StarButton(Shortcut(ShortcutKind.TAG, t), data)
+                        Box {
+                            IconButton(onClick = { menu = true }, Modifier.semantics { contentDescription = "#$t options" }) { Icon(Icons.Rounded.MoreVert, null) }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = t })
+                                DropdownMenuItem(text = { Text("Put under another tag") }, onClick = { menu = false; nesting = t })
+                                DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; deleting = t })
+                            }
+                        }
+                    },
+                    onClick = { nav.push(Page.NoteList(NoteFilter.Tagged(t))) },
+                )
             }
         }
     }
+    if (adding) NameDialog("New tag", label = "Tag", confirm = "Add", onSave = { name, _ -> Store.addTag(name, null) }, onDismiss = { adding = false })
+    renaming?.let { t -> NameDialog("Rename #$t", initial = t, label = "Tag", onSave = { name, _ -> Store.renameTag(t, name) }, onDismiss = { renaming = null }) }
+    nesting?.let { t -> TagParentDialog(data, t, onDismiss = { nesting = null }) }
+    deleting?.let { t ->
+        ConfirmDialog("Delete #$t?", "It comes off every note. The notes stay, and tags under it move up a level.", "Delete", onConfirm = { Store.deleteTag(t) }, onDismiss = { deleting = null })
+    }
+}
+
+/** Notes with reminders: coming up, then done. */
+@Composable
+fun RemindersPage(data: Data) {
+    val nav = LocalNav.current
+    val withReminders = data.liveNotes.filter { it.reminderAt != null }
+    val open = withReminders.filter { it.reminderDone == 0L }.sortedBy { it.reminderAt }
+    val done = withReminders.filter { it.reminderDone != 0L }.sortedByDescending { it.reminderDone }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        PageBar("Reminders", onBack = { nav.pop() })
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+            if (withReminders.isEmpty()) item { EmptyState(Icons.Rounded.Alarm, "No reminders", "Open a note and tap the alarm to be reminded about it.") }
+            if (open.isNotEmpty()) {
+                item { SectionHeader("Coming up") }
+                items(open, key = { "o-" + it.id }) { ReminderRow(it) }
+            }
+            if (done.isNotEmpty()) {
+                item { SectionHeader("Done") }
+                items(done, key = { "d-" + it.id }) { ReminderRow(it) }
+            }
+        }
+    }
+}
+
+/** Jotter's templates and yours: start a note from one, or delete your own. */
+@Composable
+fun TemplatesPage(data: Data) {
+    val nav = LocalNav.current
+    var deleting by remember { mutableStateOf<io.github.akrishna87.jotter.model.Template?>(null) }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        PageBar("Templates", onBack = { nav.pop() })
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+            item { SectionHeader("Yours") }
+            if (data.templates.isEmpty()) {
+                item { Text("Save any note as a template from its options.", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            items(data.templates, key = { it.id }) { t ->
+                ListRow(
+                    t.name,
+                    detail = Markdown.plain(t.body, 80).replace('\n', ' '),
+                    leading = { Icon(Icons.Rounded.NoteAdd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailing = { IconButton(onClick = { deleting = t }, Modifier.semantics { contentDescription = "Delete template ${t.name}" }) { Icon(Icons.Rounded.Delete, null) } },
+                    onClick = { nav.pop(); nav.newNote(data, template = t) },
+                )
+            }
+            item { SectionHeader("Jotter's") }
+            items(Templates.builtIn, key = { it.id }) { t ->
+                ListRow(
+                    t.name,
+                    detail = Markdown.plain(t.body, 80).replace('\n', ' '),
+                    leading = { Icon(Icons.Rounded.NoteAdd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = { nav.pop(); nav.newNote(data, template = t) },
+                )
+            }
+        }
+    }
+    deleting?.let { t -> ConfirmDialog("Delete “${t.name}”?", "Notes made from it stay as they are.", "Delete", onConfirm = { Store.deleteTemplate(t.id) }, onDismiss = { deleting = null }) }
 }
 
 /** Notes moved to the trash: restore them, delete them for good, or empty the trash. */
@@ -155,71 +452,48 @@ fun TrashPage(data: Data) {
     }
 }
 
-/** Theme, backups and the version. */
+/** Earlier versions of a note: read one, and bring it back if you want it. */
 @Composable
-fun SettingsPage(data: Data) {
+fun HistoryPage(id: String, data: Data) {
     val nav = LocalNav.current
     val actions = LocalActions.current
-    val context = LocalContext.current
-    val s = data.settings
-    var restoring by remember { mutableStateOf<Data?>(null) }
-
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) actions.message(if (Backup.export(context, uri)) "Backup saved" else "Couldn't save the backup")
+    val clock = LocalClock.current
+    val note = data.note(id)
+    if (note == null) {
+        LaunchedEffect(Unit) { nav.pop() }
+        return
     }
-    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val d = Backup.read(context, uri)
-            if (d == null) actions.message("That file isn't a Jotter backup") else restoring = d
-        }
-    }
-
+    var viewing by remember { mutableStateOf<Version?>(null) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        PageBar("Settings", onBack = { nav.pop() })
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
-            item { SectionHeader("Theme") }
-            items(ThemeMode.entries) { mode ->
-                ListRow(
-                    mode.label,
-                    leading = { RadioButton(selected = s.theme == mode, onClick = null) },
-                    onClick = { Store.updateSettings { it.copy(theme = mode) } },
-                    modifier = Modifier.semantics { contentDescription = "Theme: ${mode.label}" },
-                )
-            }
-            item { SectionHeader("Backup") }
-            item {
-                ListRow(
-                    "Export backup",
-                    detail = "Save every note and notebook to a file",
-                    onClick = { exporter.launch("jotter-backup-${LocalDate.now()}.json") },
-                )
-            }
-            item {
-                ListRow(
-                    "Restore from backup",
-                    detail = "Replace everything with a backup file",
-                    onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-                )
-            }
-            item { SectionHeader("About") }
-            item {
-                val version = remember {
-                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+        PageBar("Note history", onBack = { if (viewing != null) viewing = null else nav.pop() })
+        val v = viewing
+        if (v == null) {
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
+                item {
+                    ListRow("Now", detail = Dates.full(note.updatedAt, clock.is24Hour), leading = { Icon(Icons.Rounded.Description, null, tint = MaterialTheme.colorScheme.primary) })
                 }
-                ListRow("Jotter", detail = "Version $version · Your notes, on your phone only")
+                items(note.history.reversed(), key = { it.savedAt }) { ver ->
+                    ListRow(
+                        ver.title.ifBlank { "Untitled" },
+                        detail = Dates.full(ver.savedAt, clock.is24Hour) + " · " + Markdown.wordCount(ver.body) + " words",
+                        leading = { Icon(Icons.Rounded.History, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        onClick = { viewing = ver },
+                    )
+                }
+            }
+        } else {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                Text(Dates.full(v.savedAt, clock.is24Hour), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(v.title.ifBlank { "Untitled" }, Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.headlineSmall)
+                MarkdownView(v.body, note.attachments, noteStyles(data.settings.textSize.scale), onToggle = {}, onEdit = {}, onNoteLink = {})
+            }
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+                TextButton(onClick = {
+                    Store.restoreVersion(id, v)
+                    actions.message("Version restored. The one before is in the history.")
+                    nav.pop()
+                }) { Text("Restore this version") }
             }
         }
-    }
-    restoring?.let { backup ->
-        ConfirmDialog(
-            "Restore this backup?",
-            "It has ${backup.notes.size} notes in ${backup.notebooks.size} notebooks. Everything in Jotter now is replaced.",
-            "Restore",
-            onConfirm = {
-                Store.replaceAll(backup)
-                actions.message("Backup restored")
-            },
-            onDismiss = { restoring = null },
-        )
     }
 }

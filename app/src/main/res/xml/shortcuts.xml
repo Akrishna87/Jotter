@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon: a new note, checklist or photo note, or search. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_note"
+        android:shortcutId="note"
+        android:shortcutShortLabel="@string/shortcut_note">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.akrishna87.jotter.MainActivity"
+            android:targetPackage="io.github.akrishna87.jotter">
+            <extra android:name="new_note" android:value="note" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_checklist"
+        android:shortcutId="checklist"
+        android:shortcutShortLabel="@string/shortcut_checklist">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.akrishna87.jotter.MainActivity"
+            android:targetPackage="io.github.akrishna87.jotter">
+            <extra android:name="new_note" android:value="checklist" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_photo"
+        android:shortcutId="photo"
+        android:shortcutShortLabel="@string/shortcut_photo">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.akrishna87.jotter.MainActivity"
+            android:targetPackage="io.github.akrishna87.jotter">
+            <extra android:name="new_note" android:value="photo" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_search"
+        android:shortcutId="search"
+        android:shortcutShortLabel="@string/shortcut_search">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.akrishna87.jotter.MainActivity"
+            android:targetPackage="io.github.akrishna87.jotter">
+            <extra android:name="open" android:value="search" />
+        </intent>
+    </shortcut>
+</shortcuts>

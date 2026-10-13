@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Jotter: Quick note. Five ways to start a note. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="horizontal"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:id="@+id/quick_note"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="3dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_chip_bg"
+        android:contentDescription="Note"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_w_note"
+            android:tint="@color/brand" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Note"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/quick_checklist"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="3dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_chip_bg"
+        android:contentDescription="List"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_w_checklist"
+            android:tint="@color/brand" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="List"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/quick_photo"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="3dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_chip_bg"
+        android:contentDescription="Photo"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_w_photo"
+            android:tint="@color/brand" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Photo"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/quick_audio"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="3dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_chip_bg"
+        android:contentDescription="Audio"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_w_mic"
+            android:tint="@color/brand" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Audio"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/quick_sketch"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_margin="3dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_chip_bg"
+        android:contentDescription="Sketch"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_w_sketch"
+            android:tint="@color/brand" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Sketch"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+</LinearLayout>
