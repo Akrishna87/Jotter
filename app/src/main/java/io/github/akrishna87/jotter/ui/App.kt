@@ -237,17 +237,7 @@ private fun AppContent(data: Data) {
             Scaffold(
                 containerColor = MaterialTheme.colorScheme.surface,
                 bottomBar = {
-                    NavigationBar {
-                        for (t in Tab.entries) {
-                            NavigationBarItem(
-                                selected = nav.tab == t,
-                                onClick = { nav.tab = t },
-                                icon = { Icon(t.icon, null) },
-                                label = { Text(t.label) },
-                                modifier = Modifier.semantics { contentDescription = t.label },
-                            )
-                        }
-                    }
+                    FloatingNavBar(Tab.entries.map { NavItem(it.label, it.icon) }, Tab.entries.indexOf(nav.tab)) { nav.tab = Tab.entries[it] }
                 },
                 floatingActionButton = {
                     Fab("New note") { nav.newNote(Store.data.value, notebookId = NotesContext.notebookId, tags = listOfNotNull(NotesContext.tag)) }
@@ -266,7 +256,8 @@ private fun AppContent(data: Data) {
                 label = "page",
             ) { page ->
                 if (page != null) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) { PageContent(page, data) }
+                    // Notes are written on a sheet of paper; other pages sit on the tinted background.
+                    Surface(Modifier.fillMaxSize(), color = if (page is Page.NotePage || page is Page.History) LocalKit.current.card else MaterialTheme.colorScheme.surface) { PageContent(page, data) }
                 } else {
                     Box(Modifier)
                 }
@@ -274,7 +265,7 @@ private fun AppContent(data: Data) {
 
             SnackbarHost(
                 snackbar,
-                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = 80.dp),
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(bottom = 92.dp),
             )
 
             if (locked) {
@@ -322,11 +313,6 @@ private fun PageContent(page: Page, data: Data) {
 
 @Composable
 fun Fab(label: String, onClick: () -> Unit) {
-    FloatingActionButton(
-        onClick = onClick,
-        // Label the button itself so screen readers (and the UI tests) find it.
-        modifier = Modifier.semantics { contentDescription = label },
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-    ) { Icon(Icons.Rounded.Add, null) }
+    // Labelled on the button itself so screen readers (and the UI tests) find it.
+    KitFab(label, Icons.Rounded.Add, onClick)
 }

@@ -118,97 +118,111 @@ fun SettingsPage(data: Data) {
         PageBar("Settings", onBack = { nav.pop() })
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
             item { SectionHeader("Theme") }
-            items(ThemeMode.entries) { mode ->
-                ListRow(
-                    mode.label,
-                    leading = { RadioButton(selected = s.theme == mode, onClick = null) },
-                    onClick = { Store.updateSettings { it.copy(theme = mode) } },
-                    modifier = Modifier.semantics { contentDescription = "Theme: ${mode.label}" },
-                )
+            card {
+                ThemeMode.entries.forEach { mode -> row {
+                    ListRow(
+                        mode.label,
+                        leading = { RadioButton(selected = s.theme == mode, onClick = null) },
+                        onClick = { Store.updateSettings { it.copy(theme = mode) } },
+                        modifier = Modifier.semantics { contentDescription = "Theme: ${mode.label}" },
+                    )
+                } }
             }
             item { SectionHeader("Notes") }
-            item { ChoiceRow("Text size", s.textSize.label, TextSize.entries.map { it.label }) { i -> Store.updateSettings { it.copy(textSize = TextSize.entries[i]) } } }
-            item { ChoiceRow("Show notes as", s.listStyle.label, ListStyle.entries.map { it.label }) { i -> Store.updateSettings { it.copy(listStyle = ListStyle.entries[i]) } } }
-            item { ChoiceRow("Open on", s.startPage.label, StartPage.entries.map { it.label }) { i -> Store.updateSettings { it.copy(startPage = StartPage.entries[i]) } } }
-            item {
-                val nbs = data.notebooks.sortedBy { it.createdAt }
-                val current = nbs.firstOrNull { it.id == s.defaultNotebookId } ?: nbs.first()
-                ChoiceRow("Default notebook", current.name, nbs.map { it.name }) { i -> Store.updateSettings { it.copy(defaultNotebookId = nbs[i].id) } }
+            card {
+                row { ChoiceRow("Text size", s.textSize.label, TextSize.entries.map { it.label }) { i -> Store.updateSettings { it.copy(textSize = TextSize.entries[i]) } } }
+                row { ChoiceRow("Show notes as", s.listStyle.label, ListStyle.entries.map { it.label }) { i -> Store.updateSettings { it.copy(listStyle = ListStyle.entries[i]) } } }
+                row { ChoiceRow("Open on", s.startPage.label, StartPage.entries.map { it.label }) { i -> Store.updateSettings { it.copy(startPage = StartPage.entries[i]) } } }
+                row {
+                    val nbs = data.notebooks.sortedBy { it.createdAt }
+                    val current = nbs.firstOrNull { it.id == s.defaultNotebookId } ?: nbs.first()
+                    ChoiceRow("Default notebook", current.name, nbs.map { it.name }) { i -> Store.updateSettings { it.copy(defaultNotebookId = nbs[i].id) } }
+                }
             }
             item { SectionHeader("Home") }
-            items(HomeSection.entries) { section ->
-                val on = section in s.homeSections
-                ListRow(
-                    section.label,
-                    leading = { Checkbox(checked = on, onCheckedChange = null) },
-                    onClick = {
-                        Store.updateSettings { st ->
-                            st.copy(homeSections = if (on) st.homeSections - section else HomeSection.entries.filter { it in st.homeSections || it == section })
-                        }
-                    },
-                )
+            card {
+                HomeSection.entries.forEach { section -> row {
+                    val on = section in s.homeSections
+                    ListRow(
+                        section.label,
+                        leading = { Checkbox(checked = on, onCheckedChange = null) },
+                        onClick = {
+                            Store.updateSettings { st ->
+                                st.copy(homeSections = if (on) st.homeSections - section else HomeSection.entries.filter { it in st.homeSections || it == section })
+                            }
+                        },
+                    )
+                } }
             }
             item { SectionHeader("Passcode lock") }
-            item {
-                ListRow(
-                    if (s.passcode == null) "Lock with a passcode" else "Passcode lock is on",
-                    detail = if (s.passcode == null) "Ask for a code when Jotter opens" else "Change or turn off",
-                    leading = { Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                    trailing = { Switch(checked = s.passcode != null, onCheckedChange = { on -> if (on) settingCode = true else removingCode = true }) },
-                    onClick = { if (s.passcode == null) settingCode = true else removingCode = true },
-                )
-            }
-            if (s.passcode != null) {
-                item { ListRow("Change passcode", onClick = { settingCode = true }) }
-                item {
-                    val choices = listOf(0, 1, 5, 15, 60)
-                    ChoiceRow("Lock again after", lockLabel(s.lockAfterMinutes), choices.map(::lockLabel)) { i -> Store.updateSettings { it.copy(lockAfterMinutes = choices[i]) } }
+            card {
+                row {
+                    ListRow(
+                        if (s.passcode == null) "Lock with a passcode" else "Passcode lock is on",
+                        detail = if (s.passcode == null) "Ask for a code when Jotter opens" else "Change or turn off",
+                        leading = { Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        trailing = { Switch(checked = s.passcode != null, onCheckedChange = { on -> if (on) settingCode = true else removingCode = true }) },
+                        onClick = { if (s.passcode == null) settingCode = true else removingCode = true },
+                    )
                 }
-                if (Lock.canUseFingerprint(context)) {
-                    item {
-                        ListRow(
-                            "Unlock with fingerprint",
-                            leading = { Icon(Icons.Rounded.Fingerprint, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            trailing = { Switch(checked = s.fingerprint, onCheckedChange = { on -> Store.updateSettings { it.copy(fingerprint = on) } }) },
-                            onClick = { Store.updateSettings { it.copy(fingerprint = !it.fingerprint) } },
-                        )
+                if (s.passcode != null) {
+                    row { ListRow("Change passcode", onClick = { settingCode = true }) }
+                    row {
+                        val choices = listOf(0, 1, 5, 15, 60)
+                        ChoiceRow("Lock again after", lockLabel(s.lockAfterMinutes), choices.map(::lockLabel)) { i -> Store.updateSettings { it.copy(lockAfterMinutes = choices[i]) } }
+                    }
+                    if (Lock.canUseFingerprint(context)) {
+                        row {
+                            ListRow(
+                                "Unlock with fingerprint",
+                                leading = { Icon(Icons.Rounded.Fingerprint, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                trailing = { Switch(checked = s.fingerprint, onCheckedChange = { on -> Store.updateSettings { it.copy(fingerprint = on) } }) },
+                                onClick = { Store.updateSettings { it.copy(fingerprint = !it.fingerprint) } },
+                            )
+                        }
                     }
                 }
             }
             item { SectionHeader("Import and export") }
-            item {
-                ListRow(
-                    "Import notes",
-                    detail = "From Evernote (.enex), Markdown or text files",
-                    onClick = { notesIn.launch(arrayOf("application/enex+xml", "application/xml", "text/xml", "text/plain", "text/markdown", "application/octet-stream")) },
-                )
-            }
-            item { ListRow("Export all for Evernote", detail = "Every note with its attachments, as an .enex file", onClick = { enexOut.launch("Jotter notes.enex") }) }
-            item { ListRow("Export all as a web page", detail = "One HTML file with every note", onClick = { htmlOut.launch("Jotter notes.html") }) }
-            item {
-                ListRow("Print or save all as PDF", onClick = { (context as? Activity)?.let { Exports.print(it, data.liveNotes) } })
+            card {
+                row {
+                    ListRow(
+                        "Import notes",
+                        detail = "From Evernote (.enex), Markdown or text files",
+                        onClick = { notesIn.launch(arrayOf("application/enex+xml", "application/xml", "text/xml", "text/plain", "text/markdown", "application/octet-stream")) },
+                    )
+                }
+                row { ListRow("Export all for Evernote", detail = "Every note with its attachments, as an .enex file", onClick = { enexOut.launch("Jotter notes.enex") }) }
+                row { ListRow("Export all as a web page", detail = "One HTML file with every note", onClick = { htmlOut.launch("Jotter notes.html") }) }
+                row {
+                    ListRow("Print or save all as PDF", onClick = { (context as? Activity)?.let { Exports.print(it, data.liveNotes) } })
+                }
             }
             item { SectionHeader("Backup") }
-            item {
-                ListRow(
-                    "Export backup",
-                    detail = "Every note, notebook and setting, in one file (without attachments)",
-                    onClick = { exporter.launch("jotter-backup-${LocalDate.now()}.json") },
-                )
-            }
-            item {
-                ListRow(
-                    "Restore from backup",
-                    detail = "Replace everything with a backup file",
-                    onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-                )
+            card {
+                row {
+                    ListRow(
+                        "Export backup",
+                        detail = "Every note, notebook and setting, in one file (without attachments)",
+                        onClick = { exporter.launch("jotter-backup-${LocalDate.now()}.json") },
+                    )
+                }
+                row {
+                    ListRow(
+                        "Restore from backup",
+                        detail = "Replace everything with a backup file",
+                        onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                    )
+                }
             }
             item { SectionHeader("About") }
-            item {
-                val version = remember {
-                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+            card {
+                row {
+                    val version = remember {
+                        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+                    }
+                    ListRow("Jotter", detail = "Version $version · Your notes, on your phone only")
                 }
-                ListRow("Jotter", detail = "Version $version · Your notes, on your phone only")
             }
         }
     }

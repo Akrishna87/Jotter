@@ -68,6 +68,8 @@ import io.github.akrishna87.jotter.model.Note
 import kotlinx.coroutines.delay
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 /**
  * Home, as in Evernote: ways to start a note, a scratch pad, pinned and recent notes, reminders,
@@ -92,18 +94,18 @@ fun HomeScreen(data: Data, padding: PaddingValues) {
         item {
             ScreenHeader(greeting, DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()).format(clock.today)) {
                 SearchAction { nav.push(Page.Search()) }
-                IconButton(onClick = { nav.push(Page.SettingsPage) }, Modifier.semantics { contentDescription = "Settings" }) { Icon(Icons.Rounded.Settings, null) }
+                CircleAction(Icons.Rounded.Settings, "Settings") { nav.push(Page.SettingsPage) }
             }
         }
         item {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CreateChip(Icons.Rounded.Description, "Note") { nav.newNote(data) }
-                CreateChip(Icons.Rounded.CheckBox, "Checklist") { nav.newNote(data, kind = "checklist") }
-                CreateChip(Icons.Rounded.PhotoCamera, "Photo") { nav.newNote(data, kind = "photo") }
-                CreateChip(Icons.Rounded.DocumentScanner, "Scan") { nav.newNote(data, kind = "scan") }
-                CreateChip(Icons.Rounded.Mic, "Audio") { nav.newNote(data, kind = "audio") }
-                CreateChip(Icons.Rounded.Brush, "Sketch") { nav.newNote(data, kind = "sketch") }
-                CreateChip(Icons.Rounded.NoteAdd, "Template") { templates = true }
+                CreateChip(Icons.Rounded.Description, "Note", Color(0xFFD9861C)) { nav.newNote(data) }
+                CreateChip(Icons.Rounded.CheckBox, "Checklist", Color(0xFF0F9D76)) { nav.newNote(data, kind = "checklist") }
+                CreateChip(Icons.Rounded.PhotoCamera, "Photo", Color(0xFF2F6BFF)) { nav.newNote(data, kind = "photo") }
+                CreateChip(Icons.Rounded.DocumentScanner, "Scan", Color(0xFF7C3AED)) { nav.newNote(data, kind = "scan") }
+                CreateChip(Icons.Rounded.Mic, "Audio", Color(0xFFE5484D)) { nav.newNote(data, kind = "audio") }
+                CreateChip(Icons.Rounded.Brush, "Sketch", Color(0xFFDB2777)) { nav.newNote(data, kind = "sketch") }
+                CreateChip(Icons.Rounded.NoteAdd, "Template", Color(0xFF0E8A8A)) { templates = true }
             }
         }
         for (section in data.settings.homeSections) {
@@ -124,20 +126,20 @@ fun HomeScreen(data: Data, padding: PaddingValues) {
                     val due = live.filter { it.reminderAt != null && it.reminderDone == 0L }.sortedBy { it.reminderAt }
                     if (due.isNotEmpty()) {
                         item(key = "rem-h") { HomeHeader("Reminders", "See all") { nav.push(Page.RemindersPage) } }
-                        items(due.take(5), key = { "rem-" + it.id }) { n -> ReminderRow(n) }
+                        cardItems(due.take(5), key = { "rem-" + it.id }) { n, seg -> Box(seg) { ReminderRow(n) } }
                     }
                 }
                 HomeSection.TASKS -> {
                     val open = live.sortedByDescending { it.updatedAt }.flatMap { n -> Markdown.openChecks(n.body).map { n to it } }
                     if (open.isNotEmpty()) {
                         item(key = "tasks-h") { HomeHeader("Open checklists") }
-                        items(open.take(8), key = { (n, c) -> "task-${n.id}-${c.line}" }) { (n, c) -> CheckRow(n, c) }
+                        cardItems(open.take(8), key = { (n, c) -> "task-${n.id}-${c.line}" }) { (n, c), seg -> Box(seg) { CheckRow(n, c) } }
                     }
                 }
                 HomeSection.SHORTCUTS -> if (data.shortcuts.isNotEmpty()) {
                     item(key = "sc-h") { HomeHeader("Shortcuts") }
-                    items(data.shortcuts.mapNotNull { resolveShortcut(it, data) }, key = { "sc-" + it.key }) { s ->
-                        ListRow(s.label, leading = { Icon(s.icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = { nav.push(s.page) })
+                    cardItems(data.shortcuts.mapNotNull { resolveShortcut(it, data) }, key = { "sc-" + it.key }) { s, seg ->
+                        ListRow(s.label, seg, leading = { IconTile(s.icon, MaterialTheme.colorScheme.primary) }, onClick = { nav.push(s.page) })
                     }
                 }
                 HomeSection.TAGS -> if (data.tags.isNotEmpty()) {
@@ -158,27 +160,29 @@ fun HomeScreen(data: Data, padding: PaddingValues) {
 }
 
 @Composable
-private fun CreateChip(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+private fun CreateChip(icon: ImageVector, label: String, hue: Color, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     Column(
         Modifier
-            .width(72.dp)
+            .padding(vertical = 4.dp)
+            .width(74.dp)
+            .softShadow(shape, 3.dp)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.primaryContainer)
+            .background(LocalKit.current.card)
             .clickable(onClick = onClick)
             .semantics { contentDescription = "New ${label.lowercase()}" }
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-        Text(label, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        IconTile(icon, hue)
+        Text(label, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
     }
 }
 
 @Composable
 private fun HomeHeader(title: String, action: String? = null, onAction: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 20.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold))
         if (action != null) TextButton(onClick = onAction) { Text(action) }
     }
 }
@@ -199,10 +203,10 @@ private fun ScratchPad(data: Data) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp),
     ) {
-        Text("Scratch pad", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Scratch pad", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold), color = MaterialTheme.colorScheme.onPrimaryContainer)
         PlainField(
             value = text,
             onChange = { text = it },
@@ -236,14 +240,15 @@ private fun NoteStrip(notes: List<Note>) {
     val today = LocalClock.current.today
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         items(notes, key = { it.id }) { n ->
-            val shape = RoundedCornerShape(14.dp)
+            val shape = RoundedCornerShape(20.dp)
             Column(
                 Modifier
                     .width(156.dp)
                     .height(176.dp)
+                    .padding(vertical = 4.dp)
+                    .softShadow(shape, 3.dp)
                     .clip(shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .background(LocalKit.current.card)
                     .clickable { nav.open(n) },
             ) {
                 val image = n.attachments.firstOrNull { it.isImage }?.let { rememberThumbnail(it, 320) }

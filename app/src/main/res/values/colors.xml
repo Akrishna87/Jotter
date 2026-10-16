@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="brand">#A35F00</color>
-    <color name="window_background">#FFFFFF</color>
+    <color name="window_background">#F6F3EE</color>
     <color name="widget_background">#FAFFFFFF</color>
     <color name="widget_text">#1F1B16</color>
     <color name="widget_subtext">#6F655A</color>

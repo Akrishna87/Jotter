@@ -75,6 +75,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import java.time.LocalDateTime
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 /** The time now, updated each minute, and whether the phone uses a 24-hour clock. */
 @Immutable
@@ -85,26 +86,26 @@ data class Clock(val now: LocalDateTime, val is24Hour: Boolean) {
 val LocalClock = compositionLocalOf { Clock(LocalDateTime.now(), true) }
 val LocalActions = staticCompositionLocalOf<Actions> { error("No Actions") }
 
-/** A big screen title with an optional line under it and action icons on the right. */
+/** A big screen title, a small line above it, and round action buttons on the right. */
 @Composable
 fun ScreenHeader(title: String, subtitle: String? = null, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(title, style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         actions()
     }
 }
 
-/** A plain top bar for pages: back, a title, and actions. */
+/** A top bar for pages: a round back button, a title, and actions. */
 @Composable
 fun PageBar(title: String = "", onBack: () -> Unit, leading: @Composable RowScope.() -> Unit = {}, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack, Modifier.semantics { contentDescription = "Back" }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, null) }
+    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        CircleAction(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
         leading()
         if (title.isNotEmpty()) {
-            Text(title, Modifier.weight(1f).padding(start = 4.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         } else {
             Spacer(Modifier.weight(1f))
         }
@@ -114,28 +115,26 @@ fun PageBar(title: String = "", onBack: () -> Unit, leading: @Composable RowScop
 
 @Composable
 fun SearchAction(onClick: () -> Unit) {
-    IconButton(onClick = onClick, Modifier.semantics { contentDescription = "Search" }) { Icon(Icons.Rounded.Search, null) }
+    CircleAction(Icons.Rounded.Search, "Search", onClick = onClick)
 }
 
+/** A bold heading over a group of rows. */
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface, trailing: @Composable RowScope.() -> Unit = {}) {
-    Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = color)
-            trailing()
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Row(modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp, top = 18.dp, bottom = 6.dp).height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold), color = color)
+        trailing()
     }
 }
 
 @Composable
 fun EmptyState(icon: ImageVector, title: String, message: String, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+            Modifier.size(96.dp).clip(RoundedCornerShape(32.dp)).background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary) }
-        Text(title, Modifier.padding(top = 20.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        ) { Icon(icon, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.primary) }
+        Text(title, Modifier.padding(top = 20.dp), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Text(
             message,
             Modifier.padding(top = 6.dp),
@@ -165,13 +164,13 @@ fun ListRow(
         modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(start = 20.dp, end = 12.dp)
-            .height(if (detail != null) 64.dp else 52.dp),
+            .padding(start = 16.dp, end = 12.dp)
+            .height(if (detail != null) 64.dp else 56.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) { leading() }
+        Box(Modifier.width(48.dp), contentAlignment = Alignment.CenterStart) { leading() }
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         trailing()

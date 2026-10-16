@@ -112,6 +112,7 @@ import io.github.akrishna87.jotter.model.Shortcut
 import io.github.akrishna87.jotter.model.ShortcutKind
 import io.github.akrishna87.jotter.model.Template
 import kotlinx.coroutines.delay
+import androidx.compose.material3.FilledIconButton
 
 /**
  * A note, Evernote style. It opens ready to read, with checklists you can tick and attachments you
@@ -224,7 +225,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         PageBar(onBack = { nav.pop() }) {
             if (editing) {
-                IconButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Icon(Icons.Rounded.Check, null) }
+                FilledIconButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Icon(Icons.Rounded.Check, null) }
             } else {
                 IconButton(onClick = { editing = true }, Modifier.semantics { contentDescription = "Edit note" }) { Icon(Icons.Rounded.Edit, null) }
             }
@@ -495,8 +496,14 @@ private fun FormatBar(
     var webLink by remember { mutableStateOf(false) }
     var noteLink by remember { mutableStateOf(false) }
     var table by remember { mutableStateOf(false) }
-    Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp)) {
+    val barShape = RoundedCornerShape(28.dp)
+    Surface(
+        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).softShadow(barShape, 10.dp),
+        shape = barShape,
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+    ) {
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 2.dp)) {
             Box {
                 FormatButton(Icons.Rounded.AttachFile, "Attach") { attachMenu = true }
                 AttachMenu(attachMenu, attacher) { attachMenu = false }

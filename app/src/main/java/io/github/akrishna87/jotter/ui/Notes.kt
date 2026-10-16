@@ -85,6 +85,7 @@ import io.github.akrishna87.jotter.model.Search
 import io.github.akrishna87.jotter.model.Shortcut
 import io.github.akrishna87.jotter.model.ShortcutKind
 import java.time.LocalDate
+import androidx.compose.ui.text.font.FontWeight
 
 /** The notes a [NoteFilter] shows, not in the trash. */
 fun notesFor(filter: NoteFilter, data: Data, today: LocalDate): List<Note> = when (filter) {
@@ -498,15 +499,19 @@ private fun NoteMeta(note: Note, data: Data?, showNotebook: Boolean, today: Loca
 @Composable
 fun NoteRow(note: Note, data: Data, showNotebook: Boolean, today: LocalDate, selected: Boolean = false, modifier: Modifier = Modifier) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.fillMaxWidth().then(selectedBg(selected)).then(modifier)) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    val cardShape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).softShadow(cardShape, 3.dp).clip(cardShape)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else LocalKit.current.card).then(modifier),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (selected) Icon(Icons.Rounded.Check, "Selected", Modifier.size(18.dp).padding(end = 4.dp), tint = MaterialTheme.colorScheme.primary)
                     Text(
                         note.title.ifBlank { "Untitled" },
                         Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = if (note.title.isBlank()) muted else MaterialTheme.colorScheme.onSurface,
@@ -521,22 +526,22 @@ fun NoteRow(note: Note, data: Data, showNotebook: Boolean, today: LocalDate, sel
             }
             firstImage(note)?.let { a ->
                 val bmp = rememberThumbnail(a, 240)
-                if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.padding(start = 12.dp).size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                if (bmp != null) Image(bmp.asImageBitmap(), null, Modifier.padding(start = 12.dp).size(68.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
             }
         }
-        HorizontalDivider(Modifier.padding(start = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
 @Composable
 private fun NoteCard(note: Note, data: Data, selected: Boolean, today: LocalDate, modifier: Modifier) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(20.dp)
     Column(
         Modifier
             .fillMaxWidth()
+            .softShadow(shape, 3.dp)
             .clip(shape)
-            .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
+            .background(LocalKit.current.card)
             .then(modifier),
     ) {
         firstImage(note)?.let { a ->
@@ -545,7 +550,7 @@ private fun NoteCard(note: Note, data: Data, selected: Boolean, today: LocalDate
         }
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(note.title.ifBlank { "Untitled" }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(note.title.ifBlank { "Untitled" }, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (note.pinned) Icon(Icons.Rounded.PushPin, "Pinned", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             }
             val preview = Markdown.plain(note.body, 300)

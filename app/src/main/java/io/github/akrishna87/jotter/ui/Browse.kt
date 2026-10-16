@@ -65,6 +65,7 @@ import io.github.akrishna87.jotter.model.Shortcut
 import io.github.akrishna87.jotter.model.ShortcutKind
 import io.github.akrishna87.jotter.model.Templates
 import io.github.akrishna87.jotter.model.Version
+import androidx.compose.ui.graphics.Color
 
 /** A shortcut, ready to show: what it's called, its icon, and where it goes. */
 data class ShortcutItem(val key: String, val label: String, val icon: ImageVector, val page: Page)
@@ -94,50 +95,53 @@ fun BrowseScreen(data: Data, padding: PaddingValues) {
         item {
             ScreenHeader("Browse") {
                 SearchAction { nav.push(Page.Search()) }
-                IconButton(onClick = { nav.push(Page.SettingsPage) }, Modifier.semantics { contentDescription = "Settings" }) { Icon(Icons.Rounded.Settings, null) }
+                CircleAction(Icons.Rounded.Settings, "Settings") { nav.push(Page.SettingsPage) }
             }
         }
         val shortcuts = data.shortcuts.mapNotNull { resolveShortcut(it, data) }
         if (shortcuts.isNotEmpty()) {
             item { SectionHeader("Shortcuts") }
-            items(shortcuts, key = { "sc-" + it.key }) { s ->
-                ListRow(s.label, leading = { Icon(s.icon, null, tint = MaterialTheme.colorScheme.primary) }, onClick = { nav.push(s.page) })
+            cardItems(shortcuts, key = { "sc-" + it.key }) { sc, seg ->
+                ListRow(sc.label, seg, leading = { IconTile(sc.icon, MaterialTheme.colorScheme.primary) }, onClick = { nav.push(sc.page) })
             }
         }
         item {
             SectionHeader("Notebooks") {
-                IconButton(onClick = { newNotebook = true }, Modifier.semantics { contentDescription = "New notebook" }) { Icon(Icons.Rounded.Add, null) }
+                IconButton(onClick = { newNotebook = true }, Modifier.semantics { contentDescription = "New notebook" }) { Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary) }
                 TextButton(onClick = { nav.push(Page.Notebooks) }) { Text("Manage") }
             }
         }
-        item {
-            ListRow("All notes", leading = { Icon(Icons.Rounded.Description, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(live.size) }, onClick = { nav.tab = Tab.NOTES })
-        }
-        for (stack in data.stacks) {
-            item(key = "stack-$stack") { StackRow(stack, data) }
-        }
-        items(data.notebooksIn(null), key = { "nb-" + it.id }) { nb -> NotebookRow(nb, data, indent = false) }
+        // All notes, each stack (with its notebooks), then the notebooks in no stack: one card.
+        val books: List<Pair<String, @Composable () -> Unit>> =
+            listOf<Pair<String, @Composable () -> Unit>>("all" to @Composable {
+                ListRow("All notes", leading = { IconTile(Icons.Rounded.Description, Color(0xFFD9861C)) }, trailing = { Count(live.size) }, onClick = { nav.tab = Tab.NOTES })
+            }) +
+                data.stacks.map { stack -> ("stack-$stack" to @Composable { StackRow(stack, data) }) } +
+                data.notebooksIn(null).map { nb -> ("nb-" + nb.id to @Composable { NotebookRow(nb, data, indent = false) }) }
+        cardItems(books, key = { it.first }) { (_, row), seg -> Box(seg) { row() } }
         item { SectionHeader("Tags") { TextButton(onClick = { nav.push(Page.Tags) }) { Text("Manage") } } }
         if (data.tags.isEmpty()) {
-            item { Text("Tag notes to find them across notebooks.", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text("Tag notes to find them across notebooks.", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        items(data.childrenOf(null), key = { "tag-$it" }) { t ->
-            ListRow("#$t", leading = { Icon(Icons.AutoMirrored.Rounded.Label, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(notesFor(NoteFilter.Tagged(t), data, today).size) }, onClick = { nav.push(Page.NoteList(NoteFilter.Tagged(t))) })
+        cardItems(data.childrenOf(null), key = { "tag-$it" }) { t, seg ->
+            ListRow("#$t", seg, leading = { IconTile(Icons.AutoMirrored.Rounded.Label, Color(0xFF7C3AED)) }, trailing = { Count(notesFor(NoteFilter.Tagged(t), data, today).size) }, onClick = { nav.push(Page.NoteList(NoteFilter.Tagged(t))) })
         }
         if (data.searches.isNotEmpty()) {
             item { SectionHeader("Saved searches") }
-            items(data.searches, key = { "s-" + it.id }) { s ->
-                ListRow(s.name, detail = s.query, leading = { Icon(Icons.Rounded.SavedSearch, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = { nav.push(Page.NoteList(NoteFilter.Saved(s.id))) })
+            cardItems(data.searches, key = { "s-" + it.id }) { sv, seg ->
+                ListRow(sv.name, seg, detail = sv.query, leading = { IconTile(Icons.Rounded.SavedSearch, Color(0xFF2F6BFF)) }, onClick = { nav.push(Page.NoteList(NoteFilter.Saved(sv.id))) })
             }
         }
         item { SectionHeader("More") }
-        item {
-            val n = live.count { it.reminderAt != null && it.reminderDone == 0L }
-            ListRow("Reminders", leading = { Icon(Icons.Rounded.Alarm, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(n) }, onClick = { nav.push(Page.RemindersPage) })
+        card {
+            row {
+                val n = live.count { it.reminderAt != null && it.reminderDone == 0L }
+                ListRow("Reminders", leading = { IconTile(Icons.Rounded.Alarm, Color(0xFFE5484D)) }, trailing = { Count(n) }, onClick = { nav.push(Page.RemindersPage) })
+            }
+            row { ListRow("Templates", leading = { IconTile(Icons.Rounded.NoteAdd, Color(0xFF0E8A8A)) }, trailing = { Count(Templates.builtIn.size + data.templates.size) }, onClick = { nav.push(Page.TemplatesPage) }) }
+            row { ListRow("Trash", leading = { IconTile(Icons.Rounded.Delete, Color(0xFF625A4E)) }, trailing = { Count(data.notes.count { it.trashed }) }, onClick = { nav.push(Page.Trash) }) }
+            row { ListRow("Settings", leading = { IconTile(Icons.Rounded.Settings, Color(0xFF625A4E)) }, onClick = { nav.push(Page.SettingsPage) }) }
         }
-        item { ListRow("Templates", leading = { Icon(Icons.Rounded.NoteAdd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(Templates.builtIn.size + data.templates.size) }, onClick = { nav.push(Page.TemplatesPage) }) }
-        item { ListRow("Trash", leading = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, trailing = { Count(data.notes.count { it.trashed }) }, onClick = { nav.push(Page.Trash) }) }
-        item { ListRow("Settings", leading = { Icon(Icons.Rounded.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = { nav.push(Page.SettingsPage) }) }
     }
     if (newNotebook) {
         NameDialog("New notebook", confirm = "Create", onSave = { name, _ -> Store.saveNotebook(Notebook(name = name)) }, onDismiss = { newNotebook = false })
@@ -152,7 +156,7 @@ private fun StackRow(stack: String, data: Data) {
     Column {
         ListRow(
             stack,
-            leading = { Icon(Icons.Rounded.LibraryBooks, null, tint = MaterialTheme.colorScheme.primary) },
+            leading = { IconTile(Icons.Rounded.LibraryBooks, Color(0xFF2F6BFF)) },
             trailing = {
                 Count(notesFor(NoteFilter.InStack(stack), data, today).size)
                 IconButton(onClick = { open = !open }, Modifier.semantics { contentDescription = if (open) "Collapse $stack" else "Expand $stack" }) {
@@ -171,7 +175,7 @@ private fun NotebookRow(nb: Notebook, data: Data, indent: Boolean) {
     ListRow(
         nb.name,
         modifier = if (indent) Modifier.padding(start = 24.dp) else Modifier,
-        leading = { Icon(Icons.Rounded.Book, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        leading = { IconTile(Icons.Rounded.Book, Color(0xFFB06400)) },
         detail = if (data.settings.defaultNotebookId == nb.id) "Default notebook" else null,
         trailing = { Count(data.liveNotes.count { it.notebookId == nb.id }) },
         onClick = { nav.push(Page.NoteList(NoteFilter.InNotebook(nb.id))) },
