@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Audio notes, asked for the first time you record. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Transcribing recordings: the speech model is downloaded once, then everything runs on the phone. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Unlocking with a fingerprint. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
@@ -67,6 +71,12 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <!-- Keeps transcription going in the background. -->
+        <service
+            android:name=".TranscribeService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Opens and shares attachments, and hands the camera a file to write photos to. -->
         <provider

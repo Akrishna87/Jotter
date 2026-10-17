@@ -67,6 +67,7 @@ adb wait-for-device
 adb install -r "$APK"
 adb shell settings put global hide_error_dialogs 1 || true
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
+adb shell pm grant "$PKG" android.permission.RECORD_AUDIO || true
 adb logcat -c
 
 close_panel() { hide_keyboard; adb shell input keyevent KEYCODE_BACK; sleep 1; }
@@ -252,6 +253,30 @@ tap browse-dark "Home" last
 sleep 2
 shot 10-home-dark
 echo "PASS: dark theme"
+
+echo "--- A recording, transcribed on the phone and summarised"
+tap home-dark "New note" last
+wait_for rec-note 'content-desc="Note text"' 10 "the new note didn't open"
+hide_keyboard
+dump rec-note
+tap rec-note "Record audio"
+wait_for recording 'content-desc="Stop recording"' 15 "recording didn't start"
+sleep 4
+dump recording
+tap recording "Stop recording"
+sleep 2
+dump rec-stopped
+try_tap rec-stopped "Done editing" || true
+wait_for rec-view 'content-desc="Transcribe recording"' 15 "the recording has no Transcribe button"
+shot 11-recording
+tap rec-view "Transcribe recording"
+wait_for rec-download 'text="Download"' 10 "no prompt to download the speech model"
+tap rec-download "Download" last
+# The model is downloaded (about 60 MB) and run on the emulator's CPU.
+wait_for rec-summary 'text="Summary"|Couldn|isn.t available|stopped part-way' 900 "the recording wasn't transcribed"
+grep -q 'text="Summary"' "$OUT/rec-summary.xml" || fail "transcription failed: $(grep -o 'text="[^"]*Couldn[^"]*"\|text="[^"]*available[^"]*"\|text="[^"]*stopped[^"]*"' "$OUT/rec-summary.xml" | head -1)"
+shot 12-transcribed
+echo "PASS: transcription"
 
 if adb logcat -d | grep -q "FATAL EXCEPTION"; then
   adb logcat -d > "$OUT/logcat.txt"

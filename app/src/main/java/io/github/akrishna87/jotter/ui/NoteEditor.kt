@@ -332,6 +332,8 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                         if (linked != null) { save(); nav.open(linked) } else actions.message("That note isn't here any more")
                     },
                     onRemoveAttachment = ::removeAttachment,
+                    noteId = id,
+                    onInsertText = { text -> insertBlock(text); save() },
                 )
             }
 

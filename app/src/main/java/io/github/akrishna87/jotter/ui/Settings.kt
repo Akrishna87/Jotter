@@ -70,6 +70,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import io.github.akrishna87.jotter.model.SpeechQuality
+import io.github.akrishna87.jotter.model.SpeechLanguages
+import io.github.akrishna87.jotter.SpeechModels
+import io.github.akrishna87.jotter.Files
 
 /** Look and feel, Home, the passcode lock, importing and exporting, backups and the version. */
 @Composable
@@ -153,6 +157,33 @@ fun SettingsPage(data: Data) {
                         },
                     )
                 } }
+            }
+            item { SectionHeader("Recordings to text") }
+            card {
+                row {
+                    val qs = SpeechQuality.entries
+                    ChoiceRow("Speech model", "${s.speechQuality.label} · about ${s.speechQuality.sizeMb} MB", qs.map { "${it.label} · about ${it.sizeMb} MB" }) { i -> Store.updateSettings { it.copy(speechQuality = qs[i]) } }
+                }
+                row {
+                    val current = SpeechLanguages.firstOrNull { it.first == s.speechLanguage }?.second ?: s.speechLanguage
+                    ChoiceRow("Spoken language", current, SpeechLanguages.map { it.second }) { i -> Store.updateSettings { it.copy(speechLanguage = SpeechLanguages[i].first) } }
+                }
+                row {
+                    ListRow(
+                        "Write in English",
+                        detail = "Translate recordings in other languages",
+                        trailing = { Switch(checked = s.speechTranslate, onCheckedChange = { on -> Store.updateSettings { it.copy(speechTranslate = on) } }) },
+                        onClick = { Store.updateSettings { it.copy(speechTranslate = !it.speechTranslate) } },
+                    )
+                }
+                row {
+                    var bytes by remember { mutableStateOf(SpeechModels.downloadedBytes(context)) }
+                    ListRow(
+                        "Downloaded speech models",
+                        detail = if (bytes > 0) "${Files.sizeLabel(bytes)} · tap to remove" else "None yet. One is downloaded the first time you transcribe.",
+                        onClick = if (bytes > 0) ({ SpeechModels.deleteAll(context); bytes = 0L }) else null,
+                    )
+                }
             }
             item { SectionHeader("Passcode lock") }
             card {

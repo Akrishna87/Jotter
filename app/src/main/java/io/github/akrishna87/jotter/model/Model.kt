@@ -190,6 +190,21 @@ enum class TextSize(val label: String, val scale: Float) { SMALL("Small", 0.9f),
 
 enum class StartPage(val label: String) { HOME("Home"), NOTES("Notes") }
 
+/** The speech model used to transcribe recordings: bigger is more accurate but slower. */
+enum class SpeechQuality(val label: String, val file: String, val sizeMb: Int) {
+    FAST("Fast", "ggml-base-q5_1.bin", 60),
+    ACCURATE("Accurate", "ggml-small-q5_1.bin", 190),
+}
+
+/** Languages recordings can be in; "auto" lets the speech model tell. */
+val SpeechLanguages: List<Pair<String, String>> = listOf(
+    "auto" to "Detect automatically",
+    "en" to "English", "ta" to "Tamil", "hi" to "Hindi", "te" to "Telugu", "kn" to "Kannada", "ml" to "Malayalam",
+    "mr" to "Marathi", "bn" to "Bengali", "ur" to "Urdu", "gu" to "Gujarati", "pa" to "Punjabi",
+    "es" to "Spanish", "fr" to "French", "de" to "German", "it" to "Italian", "pt" to "Portuguese",
+    "ar" to "Arabic", "zh" to "Chinese", "ja" to "Japanese", "ko" to "Korean", "ru" to "Russian",
+)
+
 /** Home's sections, in order; each can be hidden. */
 enum class HomeSection(val label: String) { SCRATCH("Scratch pad"), PINNED("Pinned notes"), RECENT("Recent notes"), REMINDERS("Reminders"), TASKS("Open checklists"), SHORTCUTS("Shortcuts"), TAGS("Tags") }
 
@@ -209,6 +224,11 @@ data class Settings(
     /** Lock again after this many minutes away. */
     val lockAfterMinutes: Int = 1,
     val fingerprint: Boolean = true,
+    val speechQuality: SpeechQuality = SpeechQuality.FAST,
+    /** A language code from [SpeechLanguages]. */
+    val speechLanguage: String = "auto",
+    /** Write the transcript in English whatever language was spoken. */
+    val speechTranslate: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("theme", theme.name)
@@ -222,6 +242,9 @@ data class Settings(
         .put("passcode", passcode ?: "")
         .put("lockAfterMinutes", lockAfterMinutes)
         .put("fingerprint", fingerprint)
+        .put("speechQuality", speechQuality.name)
+        .put("speechLanguage", speechLanguage)
+        .put("speechTranslate", speechTranslate)
 
     companion object {
         fun fromJson(o: JSONObject?): Settings {
@@ -239,6 +262,9 @@ data class Settings(
                 passcode = o.optString("passcode").takeIf { it.isNotBlank() },
                 lockAfterMinutes = o.optInt("lockAfterMinutes", d.lockAfterMinutes),
                 fingerprint = o.optBoolean("fingerprint", d.fingerprint),
+                speechQuality = enumOr(o.optString("speechQuality"), d.speechQuality),
+                speechLanguage = o.optString("speechLanguage").ifBlank { d.speechLanguage },
+                speechTranslate = o.optBoolean("speechTranslate", d.speechTranslate),
             )
         }
     }

@@ -17,6 +17,29 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
+
+        // The speech model runner (whisper.cpp) is native code: phones are arm64; x86_64 is the emulator.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    packaging {
+        // The fastest of the CPU backends is picked at run time from the app's library folder,
+        // so the libraries have to be unpacked there.
+        jniLibs.useLegacyPackaging = true
     }
 
     signingConfigs {

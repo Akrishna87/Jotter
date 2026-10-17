@@ -60,13 +60,14 @@ object Recorder {
         recording = null
     }
 
-    fun play(context: Context, a: Attachment, onDone: () -> Unit): Boolean {
+    fun play(context: Context, a: Attachment, fromMs: Int = 0, onDone: () -> Unit): Boolean {
         stopPlaying()
         return runCatching {
             val p = MediaPlayer()
             p.setDataSource(Files.file(context, a).path)
             p.setOnCompletionListener { stopPlaying(); onDone() }
             p.prepare()
+            if (fromMs > 0) p.seekTo(fromMs)
             p.start()
             player = p
             playingId = a.id

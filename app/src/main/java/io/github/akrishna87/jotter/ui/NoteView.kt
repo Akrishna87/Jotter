@@ -103,6 +103,9 @@ fun MarkdownView(
     onEdit: () -> Unit,
     onNoteLink: (String) -> Unit,
     onRemoveAttachment: ((Attachment) -> Unit)? = null,
+    /** The note shown, so its recordings can be transcribed; null where that isn't offered. */
+    noteId: String? = null,
+    onInsertText: ((String) -> Unit)? = null,
 ) {
     val blocks = remember(body) { Markdown.parse(body.trimEnd()) }
     val m = marks()
@@ -169,7 +172,7 @@ fun MarkdownView(
                 is Block.Table -> TableView(b, styles, onEdit) { s -> text(s) }
                 is Block.Media -> {
                     val a = b.attachmentId?.let { id -> attachments.firstOrNull { it.id == id } }
-                    if (a != null) AttachmentView(a, onRemoveAttachment) else Text("📎 ${b.name}", edit.padding(vertical = 4.dp), style = styles.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (a != null) AttachmentView(a, onRemoveAttachment, noteId, onInsertText) else Text("📎 ${b.name}", edit.padding(vertical = 4.dp), style = styles.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 is Block.Paragraph -> Text(text(b.text), edit.padding(vertical = 2.dp), style = styles.body)
                 is Block.Divider -> HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -214,7 +217,7 @@ fun rememberThumbnail(a: Attachment, maxSide: Int = 1080): Bitmap? {
 /** An attachment in a note: a photo, a PDF's first page, a player for a recording, or a file card. Long-press for more. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AttachmentView(a: Attachment, onRemove: ((Attachment) -> Unit)?) {
+fun AttachmentView(a: Attachment, onRemove: ((Attachment) -> Unit)?, noteId: String? = null, onInsertText: ((String) -> Unit)? = null) {
     val context = LocalContext.current
     val actions = LocalActions.current
     var menu by remember { mutableStateOf(false) }
@@ -247,7 +250,10 @@ fun AttachmentView(a: Attachment, onRemove: ((Attachment) -> Unit)?) {
                     }
                 }
             }
-            a.isAudio -> AudioPlayer(a, Modifier.then(click))
+            a.isAudio -> Column {
+                AudioPlayer(a, Modifier.then(click))
+                TranscriptPanel(a, noteId, onInsertText)
+            }
             else -> FileCard(a, Icons.AutoMirrored.Rounded.InsertDriveFile, click)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -282,13 +288,12 @@ private fun AudioPlayer(a: Attachment, modifier: Modifier) {
     var playing by remember { mutableStateOf(Recorder.playingId == a.id) }
     var progress by remember { mutableIntStateOf(0) }
     val length = remember(a.id) { Recorder.duration(context, a) }
-    LaunchedEffect(playing) {
-        while (playing) {
-            val (pos, dur) = Recorder.position()
-            progress = pos
-            if (Recorder.playingId != a.id) playing = false
+    // Playback can also start from the transcript, so follow the player rather than this button.
+    LaunchedEffect(a.id) {
+        while (true) {
+            playing = Recorder.playingId == a.id
+            progress = if (playing) Recorder.position().first else 0
             delay(250)
-            if (dur == 0 && Recorder.playingId == null) playing = false
         }
     }
     val shape = RoundedCornerShape(28.dp)
