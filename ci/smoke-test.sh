@@ -279,7 +279,8 @@ grep -q 'text="Summary"' "$OUT/rec-summary.xml" || fail "transcription failed: $
 shot 12-transcribed
 echo "PASS: transcription"
 
-if adb logcat -d | grep -q "FATAL EXCEPTION"; then
+# Only Jotter's own crashes count (the screen dump tool sometimes crashes on its own).
+if adb logcat -d | grep -A2 "FATAL EXCEPTION" | grep -q "Process: $PKG"; then
   adb logcat -d > "$OUT/logcat.txt"
   fail "the app crashed (see logcat.txt)"
 fi
