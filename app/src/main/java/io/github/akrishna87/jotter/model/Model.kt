@@ -265,7 +265,7 @@ data class Data(
     /** Every tag: those on notes not in the trash and those set up in the tag list, alphabetically. */
     val tags: List<String>
         get() = (liveNotes.flatMap { it.tags } + tagInfo.map { it.name } + tagInfo.mapNotNull { it.parent })
-            .distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+            .distinctBy { it.lowercase() }.sortedWith(NaturalOrder)
 
     fun parentOf(tag: String): String? = tagInfo.firstOrNull { it.name.equals(tag, true) }?.parent
 
@@ -282,10 +282,10 @@ data class Data(
     }
 
     /** Stacks by name, each with its notebooks, then the notebooks in no stack. */
-    val stacks: List<String> get() = notebooks.mapNotNull { it.stack }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+    val stacks: List<String> get() = notebooks.mapNotNull { it.stack }.distinctBy { it.lowercase() }.sortedWith(NaturalOrder)
 
     fun notebooksIn(stack: String?): List<Notebook> =
-        notebooks.filter { if (stack == null) it.stack == null else it.stack.equals(stack, true) }.sortedBy { it.name.lowercase() }
+        notebooks.filter { if (stack == null) it.stack == null else it.stack.equals(stack, true) }.sortedWith(compareBy(NaturalOrder) { it.name })
 
     /** Notes that link to note [id], by `[text](note:id)` or by its title in `[[Title]]`. */
     fun backlinks(id: String): List<Note> {

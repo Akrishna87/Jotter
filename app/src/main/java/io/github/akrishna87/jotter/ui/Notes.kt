@@ -86,6 +86,7 @@ import io.github.akrishna87.jotter.model.Shortcut
 import io.github.akrishna87.jotter.model.ShortcutKind
 import java.time.LocalDate
 import androidx.compose.ui.text.font.FontWeight
+import io.github.akrishna87.jotter.model.NaturalOrder
 
 /** The notes a [NoteFilter] shows, not in the trash. */
 fun notesFor(filter: NoteFilter, data: Data, today: LocalDate): List<Note> = when (filter) {
@@ -118,7 +119,8 @@ fun sortNotes(notes: List<Note>, sort: NoteSort): List<Note> {
     val order = when (sort) {
         NoteSort.UPDATED -> compareByDescending<Note> { it.updatedAt }
         NoteSort.CREATED -> compareByDescending<Note> { it.createdAt }
-        NoteSort.TITLE -> compareBy<Note> { it.title.ifBlank { "￿" }.lowercase() }
+        // Numbers in titles count in sequence: App2 before App10. Untitled notes go last.
+        NoteSort.TITLE -> compareBy<Note> { it.title.isBlank() }.thenBy(NaturalOrder) { it.title.trim() }
         // Notes with reminders first, soonest first; done ones after.
         NoteSort.REMINDER -> compareBy<Note>({ it.reminderAt == null }, { it.reminderDone != 0L }, { it.reminderAt ?: Long.MAX_VALUE })
     }
