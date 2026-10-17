@@ -74,10 +74,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
+import androidx.compose.material.icons.rounded.Book
 
 enum class Tab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
     NOTES("Notes", Icons.Rounded.Description),
+    NOTEBOOKS("Notebooks", Icons.Rounded.Book),
     BROWSE("Browse", Icons.Rounded.Menu),
 }
 
@@ -246,6 +248,7 @@ private fun AppContent(data: Data) {
                 when (nav.tab) {
                     Tab.HOME -> HomeScreen(data, padding)
                     Tab.NOTES -> NotesScreen(data, padding)
+                    Tab.NOTEBOOKS -> NotebooksScreen(data, padding)
                     Tab.BROWSE -> BrowseScreen(data, padding)
                 }
             }

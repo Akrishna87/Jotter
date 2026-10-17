@@ -174,6 +174,19 @@ tap notebook-note "All notes"
 wait_for all-notes 'text="Meeting notes"' 10 "All notes doesn't show every note"
 echo "PASS: notebooks"
 
+echo "--- The Notebooks tab"
+tap all-notes "Notebooks" last
+wait_for notebooks-tab 'content-desc="Notebook Work, 1 note"' 10 "the Notebooks tab doesn't show Work with its note"
+shot 5b-notebooks
+tap notebooks-tab "Notebook Work, 1 note"
+wait_for work-book 'text="Quarterly plan"' 10 "opening a notebook card doesn't list its notes"
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+dump back-to-books
+tap back-to-books "Notes" last
+wait_for all-notes 'text="Meeting notes"' 10 "the Notes tab didn't come back"
+echo "PASS: Notebooks tab"
+
 echo "--- Search, Evernote style, and a saved search"
 tap all-notes "Search"
 sleep 2

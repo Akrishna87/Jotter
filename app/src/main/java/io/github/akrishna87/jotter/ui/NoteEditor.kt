@@ -113,6 +113,8 @@ import io.github.akrishna87.jotter.model.ShortcutKind
 import io.github.akrishna87.jotter.model.Template
 import kotlinx.coroutines.delay
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.PhotoCamera
 
 /**
  * A note, Evernote style. It opens ready to read, with checklists you can tick and attachments you
@@ -227,6 +229,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
             if (editing) {
                 FilledIconButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Icon(Icons.Rounded.Check, null) }
             } else {
+                IconButton(onClick = { attacher.audio() }, Modifier.semantics { contentDescription = "Record audio" }) { Icon(Icons.Rounded.Mic, null) }
                 IconButton(onClick = { editing = true }, Modifier.semantics { contentDescription = "Edit note" }) { Icon(Icons.Rounded.Edit, null) }
             }
             IconButton(onClick = { reminderDialog = true }, Modifier.semantics { contentDescription = if (reminderAt != null) "Change reminder" else "Add reminder" }) {
@@ -508,6 +511,8 @@ private fun FormatBar(
                 FormatButton(Icons.Rounded.AttachFile, "Attach") { attachMenu = true }
                 AttachMenu(attachMenu, attacher) { attachMenu = false }
             }
+            FormatButton(Icons.Rounded.Mic, "Record audio") { attacher.audio() }
+            FormatButton(Icons.Rounded.PhotoCamera, "Take photo") { attacher.camera() }
             FormatButton(Icons.Rounded.CheckBox, "Checklist") { onPrefix("[ ] ") }
             FormatButton(Icons.AutoMirrored.Rounded.FormatListBulleted, "Bulleted list") { onPrefix("- ") }
             FormatButton(Icons.Rounded.FormatListNumbered, "Numbered list") { onPrefix("1. ") }
