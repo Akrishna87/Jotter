@@ -255,6 +255,7 @@ shot 10-home-dark
 echo "PASS: dark theme"
 
 echo "--- A recording, transcribed on the phone and summarised"
+dump home-dark
 tap home-dark "New note" last
 wait_for rec-note 'content-desc="Note text"' 10 "the new note didn't open"
 hide_keyboard
