@@ -328,12 +328,15 @@ print("sketch tools all on screen")
 PY
 dump sketch-2
 tap sketch-2 "Discard sketch"
-adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural || true
-sleep 1
+wait_for sk-closed 'content-desc="Note options"' 10 "discarding the sketch didn't return to the note"
 adb shell input keyevent KEYCODE_BACK
 sleep 1
-dump sk-done
-try_tap sk-done "Browse" last || true
+# Back to gesture navigation; switching can send the emulator to its home screen, so open Jotter again.
+adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural || true
+sleep 3
+adb shell am start -W -n "$PKG/.MainActivity" > /dev/null
+wait_for sk-done 'text="Browse"' 15 "Jotter didn't come back after the navigation change"
+tap sk-done "Browse" last
 sleep 1
 echo "PASS: sketch tools fit"
 
