@@ -294,7 +294,9 @@ for i in $(seq 1 15); do
   sleep 2
 done
 [ -n "$media_id" ] || fail "the test recording didn't reach the media store"
-adb shell am start -a android.intent.action.SEND -t audio/wav --eu android.intent.extra.STREAM "content://media/external/audio/media/$media_id" --grant-read-uri-permission -n "$PKG/.MainActivity" > /dev/null
+# The read permission is granted for the intent's data, so the file goes there as well as in the extra.
+uri="content://media/external/audio/media/$media_id"
+adb shell am start -a android.intent.action.SEND -d "$uri" -t audio/wav --eu android.intent.extra.STREAM "$uri" --grant-read-uri-permission -n "$PKG/.MainActivity" > /dev/null
 wait_for shared-audio 'content-desc="Transcribe recording"' 20 "the shared recording didn't open as a note"
 tap shared-audio "Transcribe recording"
 wait_for meeting-quick 'content-desc="Make smart summary"|No speech was heard|Couldn' 600 "the meeting wasn't transcribed"
