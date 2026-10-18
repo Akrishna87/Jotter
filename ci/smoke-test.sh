@@ -117,7 +117,9 @@ dump note-agenda
 tap note-agenda "Checklist"
 sleep 1
 adb shell input text "Review%sbudget"
+# A pause after Enter, as a person makes: Enter and the next words arriving as one change don't start a new box.
 adb shell input keyevent KEYCODE_ENTER
+sleep 1
 adb shell input text "Book%sroom"
 hide_keyboard
 dump note-typed
@@ -274,6 +276,7 @@ wait_for cl-note 'content-desc="Note text"' 10 "the checklist note didn't open"
 sleep 1
 adb shell input text "Buy%smilk"
 adb shell input keyevent KEYCODE_ENTER
+sleep 1
 adb shell input text "Call%sthe%sbank"
 sleep 2
 hide_keyboard
