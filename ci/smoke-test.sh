@@ -240,6 +240,78 @@ adb shell input keyevent KEYCODE_BACK
 sleep 1
 echo "PASS: templates"
 
+echo "--- A template picked inside a note, and today's date"
+dump tpl-start
+tap tpl-start "New note" last
+wait_for tpl-note 'content-desc="Use a template"' 10 "a new note doesn't offer templates"
+hide_keyboard
+dump tpl-note
+tap tpl-note "Use a template"
+wait_for tpl-pick 'text="To-do list"' 10 "the template list didn't open inside the note"
+grep -q 'stays as it is' "$OUT/tpl-pick.xml" || fail "the template list doesn't say the template stays as it is"
+tap tpl-pick "To-do list"
+wait_for tpl-used 'Must do today' 10 "the template's text wasn't added to the note"
+grep -q 'text="To do"' "$OUT/tpl-used.xml" || fail "the template didn't give the note its title"
+tap tpl-used "Insert date"
+today="$(date +'%A %-d %B %Y')"
+wait_for tpl-dates "text=\"$today\"" 10 "the date menu doesn't offer today ($today)"
+tap tpl-dates "$today"
+hide_keyboard
+wait_for tpl-dated "$today" 10 "today's date wasn't put in the note"
+shot 9b-template-in-note
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+echo "PASS: template inside a note and insert date"
+
+echo "--- A checklist saves itself, without tapping Done"
+dump cl-start
+tap cl-start "Home" last
+wait_for cl-home 'text="Checklist"' 10 "Home has no Checklist button"
+tap cl-home "Checklist"
+wait_for cl-note 'content-desc="Note text"' 10 "the checklist note didn't open"
+sleep 1
+adb shell input text "Buy%smilk"
+adb shell input keyevent KEYCODE_ENTER
+adb shell input text "Call%sthe%sbank"
+sleep 2
+hide_keyboard
+adb shell input keyevent KEYCODE_BACK
+sleep 2
+scroll_until cl-saved 'content-desc="Tick Call the bank"' 4 "the checklist wasn't saved when leaving without Done"
+adb shell am force-stop "$PKG"
+adb shell am start -W -n "$PKG/.MainActivity" > /dev/null
+sleep 2
+scroll_until cl-reopened 'content-desc="Tick Buy milk"' 4 "the checklist was lost after the app was closed"
+echo "PASS: checklist saves itself"
+
+echo "--- The sketch pad's colours fit on screen"
+dump sk-home
+tap sk-home "Sketch"
+wait_for sketch 'content-desc="Sketch pad"' 10 "the sketch pad didn't open"
+shot 9c-sketch
+python3 - "$OUT/sketch.xml" "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f1)" <<'PY' || fail "a sketch tool is off the screen"
+import re, sys, xml.etree.ElementTree as ET
+width = int(sys.argv[2])
+want = ["Pen colour black", "Pen colour brown", "Pen width 16", "Eraser"]
+found = {n.get("content-desc"): n.get("bounds") for n in ET.parse(sys.argv[1]).iter("node") if n.get("content-desc") in want}
+for w in want:
+    if w not in found:
+        sys.exit(f"{w} isn't on screen")
+    x1, y1, x2, y2 = map(int, re.findall(r"\d+", found[w]))
+    if x1 < 0 or x2 > width or x2 - x1 < 20:
+        sys.exit(f"{w} is cut off: {found[w]} on a {width} px wide screen")
+print("sketch tools all on screen")
+PY
+dump sketch-2
+tap sketch-2 "Discard sketch"
+sleep 1
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+dump sk-done
+try_tap sk-done "Browse" last || true
+sleep 1
+echo "PASS: sketch tools fit"
+
 echo "--- Dark theme"
 dump before-settings
 tap before-settings "Settings"

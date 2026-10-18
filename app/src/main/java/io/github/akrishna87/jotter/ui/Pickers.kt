@@ -464,9 +464,15 @@ fun TagParentDialog(data: Data, tag: String, onDismiss: () -> Unit) {
 fun TemplatePickerDialog(data: Data, onPick: (Template) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Start from a template") },
+        title = { Text("Use a template") },
         text = {
             Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "Its text is copied into this note. The template itself stays as it is.",
+                    Modifier.padding(bottom = 6.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (data.templates.isNotEmpty()) {
                     Text("Yours", Modifier.padding(vertical = 6.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     for (t in data.templates) Text(t.name, Modifier.fillMaxWidth().clickable { onPick(t); onDismiss() }.padding(vertical = 10.dp))

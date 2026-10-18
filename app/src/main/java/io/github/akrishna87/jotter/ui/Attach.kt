@@ -242,7 +242,8 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
     val strokes = remember { mutableStateListOf<PenStroke>() }
     var current by remember { mutableStateOf<PenStroke?>(null) }
     var tick by remember { mutableIntStateOf(0) }
-    val palette = listOf(Color(0xFF1F1B16), Color(0xFFC62828), Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFFF9A825), Color(0xFF6A1B9A))
+    val palette = listOf(Color(0xFF1F1B16), Color(0xFFC62828), Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFFF9A825), Color(0xFF6A1B9A), Color(0xFFEF6C00), Color(0xFF8D6E63))
+    val paletteNames = listOf("black", "red", "blue", "green", "yellow", "purple", "orange", "brown")
     var color by remember { mutableStateOf(palette[0]) }
     var width by remember { mutableFloatStateOf(6f) }
     var eraser by remember { mutableStateOf(false) }
@@ -318,25 +319,28 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    for (c in palette) {
+                // Colours on one row, spread over the width so they fit any screen; pen sizes and the eraser below.
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    palette.forEachIndexed { i, c ->
                         Box(
-                            Modifier.size(32.dp).clip(CircleShape).background(c)
-                                .border(if (c == color && !eraser) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            Modifier.size(30.dp).clip(CircleShape).background(c)
+                                .border(if (c == color && !eraser) 3.dp else 1.dp, if (c == color && !eraser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape)
                                 .clickable { color = c; eraser = false }
-                                .semantics { contentDescription = "Pen colour" },
+                                .semantics { contentDescription = "Pen colour ${paletteNames[i]}" },
                         )
                     }
-                    Box(Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     for (w in listOf(4f, 8f, 16f)) {
                         Box(
-                            Modifier.size(32.dp).clip(CircleShape)
+                            Modifier.size(36.dp).clip(CircleShape)
                                 .background(if (w == width) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
                                 .clickable { width = w }
                                 .semantics { contentDescription = "Pen width ${w.toInt()}" },
                             contentAlignment = Alignment.Center,
                         ) { Box(Modifier.size((w * 1.2f).dp.coerceAtMost(20.dp)).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)) }
                     }
+                    Box(Modifier.weight(1f))
                     FilledIconButton(onClick = { eraser = !eraser }, Modifier.semantics { contentDescription = if (eraser) "Pen" else "Eraser" }) {
                         Icon(if (eraser) Icons.Rounded.Brush else Icons.Rounded.AutoFixNormal, null)
                     }

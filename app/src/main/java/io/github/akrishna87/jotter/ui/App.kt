@@ -127,8 +127,8 @@ class Nav(start: Tab) {
 
     /**
      * Starts a note: in [notebookId] (or the default notebook), with [tags], from [template], and
-     * for [kind] "checklist" ready with a box, or for a photo, scan, recording, sketch or file,
-     * starting with that.
+     * for [kind] "checklist" ready with a box, for "template" with the template list open, or for a
+     * photo, scan, recording, sketch or file, starting with that.
      */
     fun newNote(data: Data, notebookId: String? = null, tags: List<String> = emptyList(), template: Template? = null, kind: String = "note") {
         val nb = notebookId?.takeIf { id -> data.notebooks.any { it.id == id } }
@@ -136,7 +136,7 @@ class Nav(start: Tab) {
             ?: data.notebooks.sortedBy { it.createdAt }.first().id
         val (title, body) = template?.let { Templates.fill(it, LocalDate.now()) } ?: ("" to if (kind == "checklist") "[ ] " else "")
         val note = Note(notebookId = nb, tags = tags, title = title, body = body)
-        push(Page.NotePage(note.id, note, start = kind.takeIf { it in listOf("photo", "scan", "audio", "sketch", "file", "checklist") }))
+        push(Page.NotePage(note.id, note, start = kind.takeIf { it in listOf("photo", "scan", "audio", "sketch", "file", "checklist", "template") }))
     }
 }
 

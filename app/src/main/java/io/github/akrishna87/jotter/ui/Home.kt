@@ -79,7 +79,6 @@ import androidx.compose.ui.text.font.FontWeight
 fun HomeScreen(data: Data, padding: PaddingValues) {
     val nav = LocalNav.current
     val clock = LocalClock.current
-    var templates by remember { mutableStateOf(false) }
     val hour = clock.now.hour
     val greeting = when (hour) {
         in 5..11 -> "Good morning"
@@ -105,7 +104,7 @@ fun HomeScreen(data: Data, padding: PaddingValues) {
                 CreateChip(Icons.Rounded.DocumentScanner, "Scan", Color(0xFF7C3AED)) { nav.newNote(data, kind = "scan") }
                 CreateChip(Icons.Rounded.Mic, "Audio", Color(0xFFE5484D)) { nav.newNote(data, kind = "audio") }
                 CreateChip(Icons.Rounded.Brush, "Sketch", Color(0xFFDB2777)) { nav.newNote(data, kind = "sketch") }
-                CreateChip(Icons.Rounded.NoteAdd, "Template", Color(0xFF0E8A8A)) { templates = true }
+                CreateChip(Icons.Rounded.NoteAdd, "Template", Color(0xFF0E8A8A)) { nav.newNote(data, kind = "template") }
             }
         }
         for (section in data.settings.homeSections) {
@@ -156,7 +155,6 @@ fun HomeScreen(data: Data, padding: PaddingValues) {
             item { EmptyState(Icons.Rounded.Description, "Nothing here yet", "Tap + or one of the buttons above to write your first note.") }
         }
     }
-    if (templates) TemplatePickerDialog(data, onPick = { t -> nav.newNote(data, template = t) }, onDismiss = { templates = false })
 }
 
 @Composable

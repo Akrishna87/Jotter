@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Book
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -57,6 +56,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NoteAdd
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Share
@@ -111,8 +111,12 @@ import io.github.akrishna87.jotter.model.Note
 import io.github.akrishna87.jotter.model.Shortcut
 import io.github.akrishna87.jotter.model.ShortcutKind
 import io.github.akrishna87.jotter.model.Template
+import io.github.akrishna87.jotter.model.Templates
 import kotlinx.coroutines.delay
-import androidx.compose.material3.FilledIconButton
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoCamera
 
@@ -151,6 +155,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     var reminderDialog by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
     var savingTemplate by remember { mutableStateOf(false) }
+    var templatePicker by remember { mutableStateOf(false) }
     val bodyFocus = remember { FocusRequester() }
     val titleFocus = remember { FocusRequester() }
     val styles = noteStyles(data.settings.textSize.scale)
@@ -185,6 +190,14 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
         val (t, c) = Markdown.insertBlock(body.text, if (editing) body.selection.end else body.text.length, text)
         body = TextFieldValue(t, TextRange(c))
     }
+    // A template's text is copied into this note; the template itself never changes.
+    fun useTemplate(t: Template) {
+        val (tTitle, tBody) = Templates.fill(t, LocalDate.now())
+        if (title.text.isBlank()) title = TextFieldValue(tTitle)
+        if (body.text.isBlank() || body.text.trim() == "[ ]") body = TextFieldValue(tBody, TextRange(tBody.length)) else insertBlock(tBody)
+        editing = true
+        actions.message("Added “${t.name}” to this note")
+    }
     val attacher = rememberAttacher { atts ->
         attachments = attachments + atts
         insertBlock(atts.joinToString("\n") { Markdown.mediaLine(it) })
@@ -193,6 +206,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     LaunchedEffect(id) {
         when {
             page.start == "checklist" -> runCatching { bodyFocus.requestFocus() }
+            page.start == "template" -> templatePicker = true
             page.start != null -> attacher.start(page.start)
             start.isBlank -> runCatching { titleFocus.requestFocus() }
         }
@@ -227,7 +241,8 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         PageBar(onBack = { nav.pop() }) {
             if (editing) {
-                FilledIconButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Icon(Icons.Rounded.Check, null) }
+                // Everything is saved as you type; this only switches back to reading.
+                TextButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Text("Done") }
             } else {
                 IconButton(onClick = { attacher.audio() }, Modifier.semantics { contentDescription = "Record audio" }) { Icon(Icons.Rounded.Mic, null) }
                 IconButton(onClick = { editing = true }, Modifier.semantics { contentDescription = "Edit note" }) { Icon(Icons.Rounded.Edit, null) }
@@ -260,6 +275,12 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                         save()
                         Store.duplicate(id)?.let { copy -> nav.pop(); nav.open(copy) }
                     })
+                    DropdownMenuItem(text = { Text("Insert today's date") }, leadingIcon = { Icon(Icons.Rounded.Today, null) }, onClick = {
+                        menu = false
+                        insertBlock(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy").format(LocalDate.now()))
+                        editing = true
+                    })
+                    DropdownMenuItem(text = { Text("Use a template") }, leadingIcon = { Icon(Icons.Rounded.NoteAdd, null) }, onClick = { menu = false; templatePicker = true })
                     DropdownMenuItem(text = { Text("Save as template") }, leadingIcon = { Icon(Icons.Rounded.NoteAdd, null) }, onClick = { menu = false; savingTemplate = true })
                     DropdownMenuItem(text = { Text("Note info") }, leadingIcon = { Icon(Icons.Rounded.Info, null) }, onClick = { menu = false; save(); info = true })
                     if (note != null && note.history.isNotEmpty()) {
@@ -293,6 +314,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                 }
                 for (t in tags) MetaPill(null, "#$t") { tagDialog = true }
                 MetaPill(Icons.Rounded.Add, if (tags.isEmpty()) "Tag" else "", "Add tag") { tagDialog = true }
+                if (body.text.isBlank() || body.text.trim() == "[ ]") MetaPill(Icons.Rounded.NoteAdd, "Use a template") { templatePicker = true }
             }
             PlainField(
                 value = title,
@@ -303,7 +325,11 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                 modifier = Modifier.padding(top = 16.dp).focusRequester(titleFocus),
             )
             Text(
-                (if (note != null) "Edited ${Dates.shortDate(note.updatedAt, clock.today)}" else "New note"),
+                when {
+                    note == null -> "New note"
+                    editing -> "Saved automatically · " + Dates.shortDate(note.updatedAt, clock.today)
+                    else -> "Edited ${Dates.shortDate(note.updatedAt, clock.today)}"
+                },
                 Modifier.padding(top = 4.dp, bottom = 12.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -392,6 +418,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     insertBlock(block)
                     runCatching { bodyFocus.requestFocus() }
                 },
+                onTemplate = { templatePicker = true },
             )
         } else {
             Spacer(Modifier.navigationBarsPadding())
@@ -405,6 +432,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     if (reminderDialog) {
         ReminderDialog(reminderAt, reminderDone != 0L, onPick = ::setReminder, onDone = { d -> reminderDone = if (d) System.currentTimeMillis() else 0L }, onDismiss = { reminderDialog = false })
     }
+    if (templatePicker) TemplatePickerDialog(data, onPick = ::useTemplate, onDismiss = { templatePicker = false })
     if (savingTemplate) {
         NameDialog("Save as template", initial = title.text.trim(), confirm = "Save", onSave = { name, _ ->
             Store.saveTemplate(Template(name = name, title = title.text.trim(), body = body.text.trimEnd()))
@@ -494,8 +522,10 @@ private fun FormatBar(
     onWrap: (String, String) -> Unit,
     onInsert: (String) -> Unit,
     onBlock: (String) -> Unit,
+    onTemplate: () -> Unit,
 ) {
     var attachMenu by remember { mutableStateOf(false) }
+    var dateMenu by remember { mutableStateOf(false) }
     var headingMenu by remember { mutableStateOf(false) }
     var linkMenu by remember { mutableStateOf(false) }
     var webLink by remember { mutableStateOf(false) }
@@ -515,6 +545,10 @@ private fun FormatBar(
             }
             FormatButton(Icons.Rounded.Mic, "Record audio") { attacher.audio() }
             FormatButton(Icons.Rounded.PhotoCamera, "Take photo") { attacher.camera() }
+            Box {
+                FormatButton(Icons.Rounded.Today, "Insert date") { dateMenu = true }
+                DateMenu(dateMenu, onPick = onInsert) { dateMenu = false }
+            }
             FormatButton(Icons.Rounded.CheckBox, "Checklist") { onPrefix("[ ] ") }
             FormatButton(Icons.AutoMirrored.Rounded.FormatListBulleted, "Bulleted list") { onPrefix("- ") }
             FormatButton(Icons.Rounded.FormatListNumbered, "Numbered list") { onPrefix("1. ") }
@@ -548,6 +582,7 @@ private fun FormatBar(
                 }
             }
             FormatButton(Icons.Rounded.HorizontalRule, "Divider") { onBlock("---") }
+            FormatButton(Icons.Rounded.NoteAdd, "Use a template") { onTemplate() }
         }
     }
     if (webLink) LinkDialog(selectedText, onInsert = { text, url -> onInsert("[$text]($url)") }, onDismiss = { webLink = false })
@@ -558,4 +593,22 @@ private fun FormatBar(
 @Composable
 private fun FormatButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, Modifier.semantics { contentDescription = label }) { Icon(icon, null) }
+}
+
+/** Today's date (or the time) in a few forms, to drop in at the cursor. */
+@Composable
+private fun DateMenu(expanded: Boolean, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val clock = LocalClock.current
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (!expanded) return@DropdownMenu
+        val now = LocalDateTime.now()
+        val time = DateTimeFormatter.ofPattern(if (clock.is24Hour) "HH:mm" else "h:mm a")
+        val choices = listOf(
+            DateTimeFormatter.ofPattern("EEEE d MMMM yyyy").format(now),
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).format(now),
+            DateTimeFormatter.ofPattern("d MMM yyyy").format(now) + ", " + time.format(now),
+            time.format(now),
+        )
+        for (c in choices) DropdownMenuItem(text = { Text(c) }, onClick = { onDismiss(); onPick(c) })
+    }
 }
