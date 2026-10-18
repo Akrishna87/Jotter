@@ -127,7 +127,7 @@ object Markdown {
     }
 
     /** The checklist items not yet ticked, for the open checklists on Home. */
-    fun openChecks(body: String): List<Block.Check> = parse(body).filterIsInstance<Block.Check>().filter { !it.checked }
+    fun openChecks(body: String): List<Block.Check> = parse(body).filterIsInstance<Block.Check>().filter { !it.checked && it.text.isNotBlank() }
 
     /** The note as plain text for a preview or a search: Markdown marks taken out, blank lines dropped. */
     fun plain(body: String, maxChars: Int = 240): String {
