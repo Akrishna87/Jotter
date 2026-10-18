@@ -290,8 +290,8 @@ scroll_until cl-reopened 'content-desc="Tick Buy milk"' 4 "the checklist was los
 echo "PASS: checklist saves itself"
 
 echo "--- The sketch pad's colours fit on screen"
-dump sk-home
-tap sk-home "Sketch"
+# As the home screen widget does it (Home's Sketch button may be scrolled out of view).
+adb shell am start -n "$PKG/.MainActivity" -d "jotter://new/sketch" --es new_note sketch > /dev/null
 wait_for sketch 'content-desc="Sketch pad"' 10 "the sketch pad didn't open"
 shot 9c-sketch
 python3 - "$OUT/sketch.xml" "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f1)" <<'PY' || fail "a sketch tool is off the screen"
