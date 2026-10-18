@@ -408,9 +408,11 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     body = TextFieldValue(text, TextRange(s, e))
                     runCatching { bodyFocus.requestFocus() }
                 },
-                onInsert = { inline ->
+                onInsert = { given ->
                     val s = body.selection.min.coerceIn(0, body.text.length)
                     val e = body.selection.max.coerceIn(0, body.text.length)
+                    // A leading space separates the text from a word before it, and is dropped at a line's start.
+                    val inline = if (given.startsWith(" ") && (s == 0 || body.text[s - 1].isWhitespace())) given.trimStart() else given
                     body = TextFieldValue(body.text.substring(0, s) + inline + body.text.substring(e), TextRange(s + inline.length))
                     runCatching { bodyFocus.requestFocus() }
                 },
@@ -547,7 +549,7 @@ private fun FormatBar(
             FormatButton(Icons.Rounded.PhotoCamera, "Take photo") { attacher.camera() }
             Box {
                 FormatButton(Icons.Rounded.Today, "Insert date") { dateMenu = true }
-                DateMenu(dateMenu, onPick = onInsert) { dateMenu = false }
+                DateMenu(dateMenu, onPick = { onInsert(" $it") }) { dateMenu = false }
             }
             FormatButton(Icons.Rounded.CheckBox, "Checklist") { onPrefix("[ ] ") }
             FormatButton(Icons.AutoMirrored.Rounded.FormatListBulleted, "Bulleted list") { onPrefix("- ") }

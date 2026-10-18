@@ -258,8 +258,10 @@ wait_for tpl-dates "text=\"$today\"" 10 "the date menu doesn't offer today ($tod
 tap tpl-dates "$today"
 hide_keyboard
 wait_for tpl-dated "$today" 10 "today's date wasn't put in the note"
+grep -q " $today" "$OUT/tpl-dated.xml" || fail "the date was run into the text before it"
 shot 9b-template-in-note
-adb shell input keyevent KEYCODE_BACK
+hide_keyboard
+tap tpl-dated "Back"
 sleep 1
 echo "PASS: template inside a note and insert date"
 
@@ -275,6 +277,9 @@ adb shell input keyevent KEYCODE_ENTER
 adb shell input text "Call%sthe%sbank"
 sleep 2
 hide_keyboard
+# The system Back gesture, not Done: the note has to save itself.
+dump cl-typed
+grep -q 'Saved automatically' "$OUT/cl-typed.xml" || fail "the checklist doesn't say it saves itself"
 adb shell input keyevent KEYCODE_BACK
 sleep 2
 scroll_until cl-saved 'content-desc="Tick Call the bank"' 4 "the checklist wasn't saved when leaving without Done"
