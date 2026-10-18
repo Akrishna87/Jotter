@@ -221,10 +221,15 @@ private fun AppContent(data: Data) {
                 }
                 is LaunchRequest.Shared -> {
                     val note = withContext(Dispatchers.IO) { sharedNote(context, d, request) }
-                    Store.addNotes(listOf(note))
-                    nav.pages.clear()
-                    nav.open(note)
-                    actions.message("Saved to Jotter")
+                    if (note.isBlank) {
+                        // Nothing could be read (e.g. a file Jotter wasn't given access to): no empty note.
+                        actions.message("Couldn't read what was shared")
+                    } else {
+                        Store.addNotes(listOf(note))
+                        nav.pages.clear()
+                        nav.open(note)
+                        actions.message("Saved to Jotter")
+                    }
                 }
             }
         }
