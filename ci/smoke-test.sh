@@ -290,6 +290,9 @@ scroll_until cl-reopened 'content-desc="Tick Buy milk"' 4 "the checklist was los
 echo "PASS: checklist saves itself"
 
 echo "--- The sketch pad's colours fit on screen"
+# Phones with the three navigation buttons hid the tools under them; test with those buttons.
+adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
+sleep 3
 # From inside a note: Attach, then Sketch.
 dump sk-home
 tap sk-home "New note" last
@@ -302,21 +305,26 @@ show sk-menu
 tap sk-menu "Sketch"
 wait_for sketch 'content-desc="Sketch pad"' 10 "the sketch pad didn't open"
 shot 9c-sketch
-python3 - "$OUT/sketch.xml" "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f1)" <<'PY' || fail "a sketch tool is off the screen"
+size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
+density=$(adb shell wm density | grep -o '[0-9]*' | tail -1)
+python3 - "$OUT/sketch.xml" "${size%x*}" "${size#*x}" "$density" <<'PY' || fail "a sketch tool is off the screen"
 import re, sys, xml.etree.ElementTree as ET
-width = int(sys.argv[2])
+width, height, density = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+# The three-button navigation bar is 48 dp tall; nothing may sit under it.
+bottom = height - 48 * density // 160
 want = ["Pen colour black", "Pen colour brown", "Pen width 16", "Eraser"]
 found = {n.get("content-desc"): n.get("bounds") for n in ET.parse(sys.argv[1]).iter("node") if n.get("content-desc") in want}
 for w in want:
     if w not in found:
         sys.exit(f"{w} isn't on screen")
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", found[w]))
-    if x1 < 0 or x2 > width or x2 - x1 < 20:
-        sys.exit(f"{w} is cut off: {found[w]} on a {width} px wide screen")
+    if x1 < 0 or x2 > width or x2 - x1 < 20 or y2 > bottom:
+        sys.exit(f"{w} is cut off: {found[w]} on a {width}x{height} screen whose navigation buttons start at y={bottom}")
 print("sketch tools all on screen")
 PY
 dump sketch-2
 tap sketch-2 "Discard sketch"
+adb shell cmd overlay disable com.android.internal.systemui.navbar.threebutton || true
 sleep 1
 adb shell input keyevent KEYCODE_BACK
 sleep 1

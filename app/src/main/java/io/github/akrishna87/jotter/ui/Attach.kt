@@ -78,8 +78,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import io.github.akrishna87.jotter.Files
 import io.github.akrishna87.jotter.Recorder
@@ -272,8 +273,13 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
         return Files.saveBitmap(context, bmp, name)
     }
 
-    Dialog(onDismissRequest = { onDone(null) }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    // Drawn over the note in the app's own window rather than in a dialog window: a dialog doesn't
+    // always learn where the phone's navigation buttons are, and the tools ended up under them.
+    BackHandler { onDone(null) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { keyboard?.hide() }
+    run {
+        Surface(Modifier.fillMaxSize().zIndex(10f), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { onDone(null) }, Modifier.semantics { contentDescription = "Discard sketch" }) { Icon(Icons.Rounded.Close, null) }
