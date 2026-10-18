@@ -291,8 +291,9 @@ echo "PASS: checklist saves itself"
 
 echo "--- The sketch pad's colours fit on screen"
 # Phones with the three navigation buttons hid the tools under them; test with those buttons.
-adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
-sleep 3
+adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton || adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
+sleep 5
+adb shell cmd overlay list | grep -i navbar || true
 # From inside a note: Attach, then Sketch.
 dump sk-home
 tap sk-home "New note" last
@@ -306,12 +307,15 @@ tap sk-menu "Sketch"
 wait_for sketch 'content-desc="Sketch pad"' 10 "the sketch pad didn't open"
 shot 9c-sketch
 size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
-density=$(adb shell wm density | grep -o '[0-9]*' | tail -1)
-python3 - "$OUT/sketch.xml" "${size%x*}" "${size#*x}" "$density" <<'PY' || fail "a sketch tool is off the screen"
+# Where the system's navigation bar starts, as the window manager has it.
+navbar=$(adb shell dumpsys window | grep -o 'type=navigationBars frame=\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]' | head -1 || true)
+echo "  navigation bar: $navbar"
+python3 - "$OUT/sketch.xml" "${size%x*}" "${size#*x}" "$navbar" <<'PY' || fail "a sketch tool is off the screen"
 import re, sys, xml.etree.ElementTree as ET
-width, height, density = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
-# The three-button navigation bar is 48 dp tall; nothing may sit under it.
-bottom = height - 48 * density // 160
+width, height = int(sys.argv[2]), int(sys.argv[3])
+nums = list(map(int, re.findall(r"\d+", sys.argv[4])))
+# Nothing may sit under the navigation bar (its top edge; the screen's bottom if it wasn't found).
+bottom = nums[1] if len(nums) == 4 and nums[1] > height // 2 else height
 want = ["Pen colour black", "Pen colour brown", "Pen width 16", "Eraser"]
 found = {n.get("content-desc"): n.get("bounds") for n in ET.parse(sys.argv[1]).iter("node") if n.get("content-desc") in want}
 for w in want:
@@ -324,7 +328,7 @@ print("sketch tools all on screen")
 PY
 dump sketch-2
 tap sketch-2 "Discard sketch"
-adb shell cmd overlay disable com.android.internal.systemui.navbar.threebutton || true
+adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural || true
 sleep 1
 adb shell input keyevent KEYCODE_BACK
 sleep 1
