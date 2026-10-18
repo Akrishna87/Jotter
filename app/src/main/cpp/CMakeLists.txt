@@ -1,4 +1,5 @@
-# Speech to text on the phone: whisper.cpp (MIT licence), built for each ABI.
+# On-phone AI: whisper.cpp for speech to text and llama.cpp for summaries (both MIT licence),
+# sharing one copy of their ggml engine. Built for each ABI.
 cmake_minimum_required(VERSION 3.22.1)
 project(jotter_speech C CXX)
 
@@ -21,16 +22,32 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
 set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
 
+set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_APP OFF CACHE BOOL "" FORCE)
+set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
+
 include(FetchContent)
+# Both released on 10 September 2026 with ggml 0.23.0. llama.cpp comes first so its ggml is the one
+# built; whisper.cpp then uses it instead of its own copy.
+FetchContent_Declare(
+    llama
+    GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
+    GIT_TAG 50182a53fa2c26bd2a7fc31d855231effdc2f4ad # b10900
+)
 FetchContent_Declare(
     whisper
     GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
-    GIT_TAG 48f628a84833905ee4a0658ee6d4a5c915ce1997 # v1.8.7
+    GIT_TAG 927cfce34f31707e17f2bff35c349632fb9e2c3a # v1.9.4
 )
-FetchContent_MakeAvailable(whisper)
+FetchContent_MakeAvailable(llama whisper)
 
-add_library(jotter_speech SHARED speech.cpp)
-target_link_libraries(jotter_speech PRIVATE whisper ggml)
+add_library(jotter_speech SHARED speech.cpp summary.cpp)
+target_link_libraries(jotter_speech PRIVATE whisper llama ggml)
 if (ANDROID)
     target_link_libraries(jotter_speech PRIVATE log)
 endif ()

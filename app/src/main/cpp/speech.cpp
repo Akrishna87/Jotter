@@ -8,9 +8,10 @@
 #include "ggml-backend.h"
 #include "whisper.h"
 
-namespace {
-
+// Set by Kotlin to stop transcription or a summary part-way; shared with summary.cpp.
 std::atomic<bool> cancelled{false};
+
+namespace {
 
 struct Listener {
     JNIEnv * env;

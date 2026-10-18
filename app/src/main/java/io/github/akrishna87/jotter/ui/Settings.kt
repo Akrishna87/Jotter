@@ -72,7 +72,9 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import io.github.akrishna87.jotter.model.SpeechQuality
 import io.github.akrishna87.jotter.model.SpeechLanguages
-import io.github.akrishna87.jotter.SpeechModels
+import io.github.akrishna87.jotter.Models
+import io.github.akrishna87.jotter.SummaryModels
+import io.github.akrishna87.jotter.model.SummaryModel
 import io.github.akrishna87.jotter.Files
 
 /** Look and feel, Home, the passcode lock, importing and exporting, backups and the version. */
@@ -177,11 +179,17 @@ fun SettingsPage(data: Data) {
                     )
                 }
                 row {
-                    var bytes by remember { mutableStateOf(SpeechModels.downloadedBytes(context)) }
+                    val recommended = remember { SummaryModels.recommended(context) }
+                    val options = listOf<SummaryModel?>(null) + SummaryModel.entries
+                    fun name(m: SummaryModel?) = if (m == null) "Automatic (${recommended.label} for this phone)" else "${m.label} · about ${m.sizeLabel}"
+                    ChoiceRow("Smart summary model", name(s.summaryModel), options.map(::name)) { i -> Store.updateSettings { it.copy(summaryModel = options[i]) } }
+                }
+                row {
+                    var bytes by remember { mutableStateOf(Models.downloadedBytes(context)) }
                     ListRow(
-                        "Downloaded speech models",
+                        "Downloaded models",
                         detail = if (bytes > 0) "${Files.sizeLabel(bytes)} · tap to remove" else "None yet. One is downloaded the first time you transcribe.",
-                        onClick = if (bytes > 0) ({ SpeechModels.deleteAll(context); bytes = 0L }) else null,
+                        onClick = if (bytes > 0) ({ Models.deleteAll(context); bytes = 0L }) else null,
                     )
                 }
             }

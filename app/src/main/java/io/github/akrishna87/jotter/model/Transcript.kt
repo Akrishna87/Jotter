@@ -12,6 +12,8 @@ data class Transcript(
     val language: String = "",
     val translated: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
+    /** The summary written by the on-phone language model, once it's been made. */
+    val smart: MeetingSummary? = null,
 ) {
     data class Segment(val startMs: Long, val endMs: Long, val text: String)
 
@@ -24,6 +26,7 @@ data class Transcript(
         .put("translated", translated)
         .put("createdAt", createdAt)
         .put("segments", JSONArray(segments.map { JSONArray().put(it.startMs).put(it.endMs).put(it.text) }))
+        .apply { smart?.let { put("smart", it.toJson()) } }
 
     companion object {
         fun fromJson(o: JSONObject): Transcript {
@@ -38,6 +41,7 @@ data class Transcript(
                 language = o.optString("language"),
                 translated = o.optBoolean("translated"),
                 createdAt = o.optLong("createdAt"),
+                smart = o.optJSONObject("smart")?.let(MeetingSummary::fromJson),
             )
         }
     }
@@ -48,15 +52,23 @@ data class MeetingSummary(
     val keyPoints: List<Line>,
     val decisions: List<Line>,
     val actions: List<Line>,
+    /** A sentence or two on what the meeting was about; only the language model writes one. */
+    val overview: String = "",
 ) {
-    /** A sentence and when it was said, so tapping it can play that moment. */
+    /** A sentence and when it was said (-1 if unknown), so tapping it can play that moment. */
     data class Line(val text: String, val atMs: Long)
 
-    val isEmpty: Boolean get() = keyPoints.isEmpty() && decisions.isEmpty() && actions.isEmpty()
+    val isEmpty: Boolean get() = keyPoints.isEmpty() && decisions.isEmpty() && actions.isEmpty() && overview.isBlank()
+
+    fun toJson(): JSONObject {
+        fun lines(l: List<Line>) = JSONArray(l.map { JSONArray().put(it.text).put(it.atMs) })
+        return JSONObject().put("overview", overview).put("keyPoints", lines(keyPoints)).put("decisions", lines(decisions)).put("actions", lines(actions))
+    }
 
     /** The summary as note text: headings, bullets and a checklist of the action items. */
     fun toMarkdown(title: String = "Meeting summary"): String = buildString {
         append("## ").append(title).append('\n')
+        if (overview.isNotBlank()) append(overview.trim()).append('\n')
         keyPoints.forEach { append("- ").append(it.text).append('\n') }
         if (decisions.isNotEmpty()) {
             append("### Decisions\n")
@@ -67,6 +79,16 @@ data class MeetingSummary(
             actions.forEach { append("[ ] ").append(it.text).append('\n') }
         }
     }.trimEnd()
+
+    companion object {
+        fun fromJson(o: JSONObject): MeetingSummary {
+            fun lines(name: String): List<Line> {
+                val a = o.optJSONArray(name) ?: return emptyList()
+                return (0 until a.length()).mapNotNull { i -> a.optJSONArray(i)?.let { Line(it.optString(0), it.optLong(1, -1)) } }
+            }
+            return MeetingSummary(lines("keyPoints"), lines("decisions"), lines("actions"), o.optString("overview"))
+        }
+    }
 }
 
 /**

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Gavel
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.akrishna87.jotter.Recorder
 import io.github.akrishna87.jotter.SpeechModels
+import io.github.akrishna87.jotter.SummaryModels
 import io.github.akrishna87.jotter.Store
 import io.github.akrishna87.jotter.Transcriber
 import io.github.akrishna87.jotter.Transcripts
@@ -70,56 +72,75 @@ fun TranscriptPanel(a: Attachment, noteId: String?, onInsert: ((String) -> Unit)
     val transcript = remember(a.id, version) { Transcripts.load(context, a.id) }
     val job = Transcriber.jobs.collectAsState().value[a.id]
     val failure = Transcriber.failures.collectAsState().value[a.id]
-    var asking by remember { mutableStateOf(false) }
-    val quality = Store.data.collectAsState().value.settings.speechQuality
+    var asking by remember { mutableStateOf<String?>(null) }
+    val settings = Store.data.collectAsState().value.settings
+    val quality = settings.speechQuality
+    val summaryModel = remember(settings.summaryModel) { SummaryModels.chosen(context) }
 
-    fun start() {
+    fun transcribe() {
         if (noteId == null) return
-        if (SpeechModels.isReady(context, quality)) Transcriber.start(context, a, noteId) else asking = true
+        if (SpeechModels.isReady(context, quality)) Transcriber.start(context, a, noteId) else asking = "speech"
     }
 
-    when {
-        job != null -> JobRow(job) { Transcriber.cancel(a.id) }
-        transcript != null -> SummaryCard(a, transcript, onInsert, onRedo = ::start)
-        noteId != null -> Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            if (failure != null && failure != "Stopped") {
-                Text(failure, Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
-            OutlinedButton(onClick = ::start, Modifier.semantics { contentDescription = "Transcribe recording" }) {
+    fun summarize() {
+        if (noteId == null) return
+        if (SummaryModels.isReady(context, summaryModel)) Transcriber.summarize(context, a, noteId) else asking = "summary"
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        if (transcript != null) {
+            SummaryCard(a, transcript, onInsert, onRedo = ::transcribe, onSmart = if (noteId != null && job == null) ::summarize else null)
+        }
+        if (job != null) {
+            JobRow(job) { Transcriber.cancel(a.id) }
+        } else if (failure != null && failure != "Stopped") {
+            Text(failure, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (transcript == null && job == null && noteId != null) {
+            OutlinedButton(onClick = ::transcribe, Modifier.padding(top = 6.dp).semantics { contentDescription = "Transcribe recording" }) {
                 Icon(Icons.AutoMirrored.Rounded.Notes, null, Modifier.size(18.dp))
                 Text("Transcribe and summarise", Modifier.padding(start = 8.dp))
             }
         }
     }
 
-    if (asking) {
-        AlertDialog(
-            onDismissRequest = { asking = false },
-            title = { Text("Download the speech model?") },
-            text = {
-                Text(
-                    "Jotter turns recordings into text on this phone. Nothing you record is uploaded.\n\n" +
-                        "The ${quality.label.lowercase()} speech model is about ${quality.sizeMb} MB and is downloaded once. " +
-                        "You can change it in Settings.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    asking = false
-                    if (noteId != null) Transcriber.start(context, a, noteId)
-                }) { Text("Download") }
-            },
-            dismissButton = { TextButton(onClick = { asking = false }) { Text("Not now") } },
+    when (asking) {
+        "speech" -> DownloadDialog(
+            title = "Download the speech model?",
+            text = "Jotter turns recordings into text on this phone. Nothing you record is uploaded.\n\n" +
+                "The ${quality.label.lowercase()} speech model is about ${quality.sizeMb} MB and is downloaded once. You can change it in Settings.",
+            onDownload = { if (noteId != null) Transcriber.start(context, a, noteId) },
+            onDismiss = { asking = null },
+        )
+        "summary" -> DownloadDialog(
+            title = "Download the summary model?",
+            text = "A small language model writes the summary on this phone. Nothing is uploaded, and it works offline once downloaded.\n\n" +
+                "The ${summaryModel.label} model (picked for this phone) is about ${summaryModel.sizeLabel} and is downloaded once. " +
+                "Use Wi-Fi if you can. You can change it in Settings.",
+            onDownload = { if (noteId != null) Transcriber.summarize(context, a, noteId) },
+            onDismiss = { asking = null },
         )
     }
 }
 
 @Composable
+private fun DownloadDialog(title: String, text: String, onDownload: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = { TextButton(onClick = { onDismiss(); onDownload() }) { Text("Download") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
+    )
+}
+
+@Composable
 private fun JobRow(job: Transcriber.Job, onCancel: () -> Unit) {
     val (label, pct) = when (job) {
-        is Transcriber.Job.Waiting -> "Waiting to transcribe" to null
-        is Transcriber.Job.Downloading -> "Downloading the speech model · ${job.percent}%" to job.percent
+        is Transcriber.Job.Waiting -> "Waiting" to null
+        is Transcriber.Job.Downloading -> "Downloading the ${job.what} · ${job.percent}%" to job.percent
         is Transcriber.Job.Running -> "Transcribing · ${job.percent}%" to job.percent
+        is Transcriber.Job.Summarizing -> "Writing a smart summary · ${job.percent}%" to job.percent
     }
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -130,20 +151,23 @@ private fun JobRow(job: Transcriber.Job, onCancel: () -> Unit) {
                 LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
             }
         }
-        IconButton(onClick = onCancel, Modifier.semantics { contentDescription = "Cancel transcription" }) { Icon(Icons.Rounded.Close, null) }
+        IconButton(onClick = onCancel, Modifier.semantics { contentDescription = "Cancel" }) { Icon(Icons.Rounded.Close, null) }
     }
 }
 
 @Composable
-private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Unit)?, onRedo: () -> Unit) {
+private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Unit)?, onRedo: () -> Unit, onSmart: (() -> Unit)?) {
     val context = LocalContext.current
     val actions = LocalActions.current
     val clipboard = LocalClipboardManager.current
     val kit = LocalKit.current
-    val summary = remember(t) { Summarizer.summarize(t) }
+    val quick = remember(t) { Summarizer.summarize(t) }
+    var showQuick by rememberSaveable(a.id) { mutableStateOf(false) }
+    val smart = t.smart?.takeIf { !showQuick }
+    val summary = smart ?: quick
     var showAll by rememberSaveable(a.id) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
-    val play = { ms: Long -> if (!Recorder.play(context, a, fromMs = ms.toInt()) {}) actions.message("Couldn't play ${a.name}") }
+    val play = { ms: Long -> if (ms >= 0 && !Recorder.play(context, a, fromMs = ms.toInt()) {}) actions.message("Couldn't play ${a.name}") }
     val language = SpeechLanguages.firstOrNull { it.first == t.language }?.second
 
     Column(
@@ -156,7 +180,7 @@ private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Uni
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Rounded.Notes, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Summary", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold))
+            Text(if (smart != null) "Smart summary" else "Summary", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold))
             if (language != null && t.language != "en") {
                 Text(
                     if (t.translated) "$language → English" else language,
@@ -169,6 +193,10 @@ private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Uni
             Box {
                 IconButton(onClick = { menu = true }, Modifier.semantics { contentDescription = "Transcript options" }) { Icon(Icons.Rounded.MoreVert, null) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    if (t.smart != null) {
+                        DropdownMenuItem(text = { Text(if (showQuick) "Show smart summary" else "Show quick summary") }, onClick = { menu = false; showQuick = !showQuick })
+                        if (onSmart != null) DropdownMenuItem(text = { Text("Write smart summary again") }, onClick = { menu = false; showQuick = false; onSmart() })
+                    }
                     DropdownMenuItem(text = { Text("Copy summary") }, onClick = {
                         menu = false
                         clipboard.setText(AnnotatedString(summary.toMarkdown()))
@@ -192,6 +220,9 @@ private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Uni
             }
         }
 
+        if (summary.overview.isNotBlank()) {
+            Text(summary.overview, Modifier.padding(end = 10.dp, bottom = 4.dp), style = MaterialTheme.typography.bodyMedium)
+        }
         if (summary.isEmpty) {
             Text("No speech was heard in this recording.", Modifier.padding(end = 10.dp, bottom = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
@@ -203,6 +234,12 @@ private fun SummaryCard(a: Attachment, t: Transcript, onInsert: ((String) -> Uni
             if (summary.actions.isNotEmpty()) {
                 Heading("Action items")
                 summary.actions.forEach { Point(it, Icons.Rounded.CheckBoxOutlineBlank, play) }
+            }
+            if (t.smart == null && onSmart != null) {
+                OutlinedButton(onClick = onSmart, Modifier.padding(top = 10.dp).semantics { contentDescription = "Make smart summary" }) {
+                    Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp))
+                    Text("Make a smart summary", Modifier.padding(start = 8.dp))
+                }
             }
             if (onInsert != null) {
                 FilledTonalButton(

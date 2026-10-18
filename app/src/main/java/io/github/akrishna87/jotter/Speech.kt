@@ -1,6 +1,7 @@
 package io.github.akrishna87.jotter
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -21,7 +22,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.github.akrishna87.jotter.model.Attachment
+import io.github.akrishna87.jotter.model.SmartSummary
 import io.github.akrishna87.jotter.model.SpeechQuality
+import io.github.akrishna87.jotter.model.SummaryModel
 import io.github.akrishna87.jotter.model.Transcript
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,30 +57,35 @@ object Whisper {
     external fun transcribe(ctx: Long, pcm: FloatArray, threads: Int, language: String, translate: Boolean, prompt: String, progress: Progress?): ByteArray?
 }
 
-/** The speech models, downloaded once into the app's own storage. */
-object SpeechModels {
-    private const val BASE = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
+/** The small language model that writes smart summaries (llama.cpp, in the same library as whisper.cpp). */
+object Llm {
+    fun available(): Boolean = Whisper.available()
 
-    fun file(context: Context, q: SpeechQuality): File = File(File(context.filesDir, "models"), q.file)
+    external fun open(path: String, nCtx: Int, threads: Int): Long
+    external fun close(handle: Long)
+    external fun countTokens(handle: Long, text: String): Int
+    external fun contextSize(handle: Long): Int
+    external fun generate(handle: Long, system: String, user: String, maxTokens: Int, progress: Whisper.Progress?): ByteArray?
+}
 
-    fun isReady(context: Context, q: SpeechQuality): Boolean = file(context, q).let { it.exists() && it.length() > 1_000_000 }
+/** Downloads a model file once into the app's own storage, resuming nothing: a failed download is retried from the start. */
+object Models {
+    fun dir(context: Context) = File(context.filesDir, "models")
 
-    fun downloadedBytes(context: Context): Long = File(context.filesDir, "models").listFiles()?.sumOf { it.length() } ?: 0L
+    fun downloadedBytes(context: Context): Long = dir(context).listFiles()?.sumOf { it.length() } ?: 0L
 
     fun deleteAll(context: Context) {
-        File(context.filesDir, "models").listFiles()?.forEach { it.delete() }
+        dir(context).listFiles()?.forEach { it.delete() }
     }
 
-    /** Downloads [q]'s model, telling [progress] the percentage; true once it's on the phone. */
-    fun download(context: Context, q: SpeechQuality, cancelled: () -> Boolean, progress: (Int) -> Unit): Boolean {
-        val target = file(context, q)
-        if (isReady(context, q)) return true
+    /** Downloads [url] to [target], telling [progress] the percentage; true once it's on the phone. */
+    fun fetch(url: String, target: File, cancelled: () -> Boolean, progress: (Int) -> Unit): Boolean {
         target.parentFile?.mkdirs()
         val part = File(target.path + ".part")
         return runCatching {
             // Follow the download's redirects (to the file host) by hand, as they change host.
-            var url = URL(BASE + q.file)
-            var conn = url.openConnection() as HttpURLConnection
+            var at = URL(url)
+            var conn = at.openConnection() as HttpURLConnection
             var hops = 0
             while (true) {
                 conn.connectTimeout = 20_000
@@ -88,9 +96,9 @@ object SpeechModels {
                     if (code != 200) error("HTTP $code")
                     break
                 }
-                url = URL(url, conn.getHeaderField("Location"))
+                at = URL(at, conn.getHeaderField("Location"))
                 conn.disconnect()
-                conn = url.openConnection() as HttpURLConnection
+                conn = at.openConnection() as HttpURLConnection
                 hops++
             }
             val total = conn.contentLengthLong
@@ -115,6 +123,38 @@ object SpeechModels {
             part.renameTo(target)
         }.getOrElse { part.delete(); false }
     }
+}
+
+/** The speech models (whisper.cpp). */
+object SpeechModels {
+    private const val BASE = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
+
+    fun file(context: Context, q: SpeechQuality): File = File(Models.dir(context), q.file)
+
+    fun isReady(context: Context, q: SpeechQuality): Boolean = file(context, q).let { it.exists() && it.length() > 1_000_000 }
+
+    fun download(context: Context, q: SpeechQuality, cancelled: () -> Boolean, progress: (Int) -> Unit): Boolean =
+        isReady(context, q) || Models.fetch(BASE + q.file, file(context, q), cancelled, progress)
+}
+
+/** The summary models (llama.cpp). */
+object SummaryModels {
+    fun file(context: Context, m: SummaryModel): File = File(Models.dir(context), m.file)
+
+    fun isReady(context: Context, m: SummaryModel): Boolean = file(context, m).let { it.exists() && it.length() > 1_000_000 }
+
+    /** The model for this phone's memory. */
+    fun recommended(context: Context): SummaryModel {
+        val info = ActivityManager.MemoryInfo()
+        context.getSystemService(ActivityManager::class.java)?.getMemoryInfo(info)
+        return SummaryModel.forRam(info.totalMem)
+    }
+
+    /** The model chosen in Settings, or the one for this phone. */
+    fun chosen(context: Context): SummaryModel = Store.data.value.settings.summaryModel ?: recommended(context)
+
+    fun download(context: Context, m: SummaryModel, cancelled: () -> Boolean, progress: (Int) -> Unit): Boolean =
+        isReady(context, m) || Models.fetch("https://huggingface.co/${m.repo}/resolve/main/${m.file}", file(context, m), cancelled, progress)
 }
 
 /** Reads any audio file the phone can play as 16 kHz mono samples, the form the speech model takes. */
@@ -270,8 +310,10 @@ object Transcriber {
     sealed interface Job {
         val noteId: String
         data class Waiting(override val noteId: String) : Job
-        data class Downloading(override val noteId: String, val percent: Int) : Job
+        /** [what] is "speech model" or "summary model". */
+        data class Downloading(override val noteId: String, val percent: Int, val what: String) : Job
         data class Running(override val noteId: String, val percent: Int) : Job
+        data class Summarizing(override val noteId: String, val percent: Int) : Job
     }
 
     private val state = MutableStateFlow<Map<String, Job>>(emptyMap())
@@ -284,7 +326,7 @@ object Transcriber {
     /** Why the last try failed, by attachment id, until it's tried again. */
     val failures: StateFlow<Map<String, String>> = failed
 
-    private data class Request(val attachment: Attachment, val noteId: String)
+    private data class Request(val attachment: Attachment, val noteId: String, val summarize: Boolean)
 
     private val queue = ArrayDeque<Request>()
     @Volatile private var cancelledIds = emptySet<String>()
@@ -293,14 +335,20 @@ object Transcriber {
         state.value = if (job == null) state.value - id else state.value + (id to job)
     }
 
-    fun start(context: Context, attachment: Attachment, noteId: String) {
-        if (attachment.id in state.value) return
-        failed.value = failed.value - attachment.id
+    /** Transcribes a recording, then writes a smart summary if the summary model is already on the phone. */
+    fun start(context: Context, attachment: Attachment, noteId: String) = enqueue(context, Request(attachment, noteId, summarize = false))
+
+    /** Writes a smart summary of a recording's transcript, downloading the summary model first if needed. */
+    fun summarize(context: Context, attachment: Attachment, noteId: String) = enqueue(context, Request(attachment, noteId, summarize = true))
+
+    private fun enqueue(context: Context, r: Request) {
+        if (r.attachment.id in state.value) return
+        failed.value = failed.value - r.attachment.id
         synchronized(queue) {
-            cancelledIds = cancelledIds - attachment.id
-            queue.addLast(Request(attachment, noteId))
+            cancelledIds = cancelledIds - r.attachment.id
+            queue.addLast(r)
         }
-        set(attachment.id, Job.Waiting(noteId))
+        set(r.attachment.id, Job.Waiting(r.noteId))
         ContextCompat.startForegroundService(context, Intent(context, TranscribeService::class.java))
     }
 
@@ -321,10 +369,19 @@ object Transcriber {
             val r = next() ?: return
             val id = r.attachment.id
             if (Whisper.available()) Whisper.setCancelled(false)
-            val result = runCatching { transcribe(context, r, onProgress) }.getOrElse { "Transcription stopped: ${it.message ?: "unknown error"}" }
+            val result = runCatching { if (r.summarize) summarizeNow(context, r, onProgress) else transcribe(context, r, onProgress) }
+                .getOrElse { "Stopped: ${it.message ?: "unknown error"}" }
             set(id, null)
             if (result != null && id !in cancelledIds) failed.value = failed.value + (id to result)
-            if (result == null) Notifier.done(context, r.noteId)
+            if (result == null) {
+                // A fresh transcript gets its smart summary straight away when the model is here already.
+                if (!r.summarize && SummaryModels.isReady(context, SummaryModels.chosen(context)) && Transcripts.load(context, id)?.text?.isNotBlank() == true) {
+                    synchronized(queue) { queue.addFirst(r.copy(summarize = true)) }
+                    set(id, Job.Waiting(r.noteId))
+                } else {
+                    Notifier.done(context, r.noteId, summarized = r.summarize)
+                }
+            }
         }
     }
 
@@ -336,10 +393,10 @@ object Transcriber {
         val stopped = { id in cancelledIds }
 
         if (!SpeechModels.isReady(context, quality)) {
-            set(id, Job.Downloading(r.noteId, 0))
+            set(id, Job.Downloading(r.noteId, 0, "speech model"))
             onProgress("Downloading the speech model")
             val ok = SpeechModels.download(context, quality, stopped) { pct ->
-                set(id, Job.Downloading(r.noteId, pct))
+                set(id, Job.Downloading(r.noteId, pct, "speech model"))
                 onProgress("Downloading the speech model · $pct%")
             }
             if (stopped()) return "Stopped"
@@ -398,6 +455,83 @@ object Transcriber {
     }
 
     private const val CHUNK_SECONDS = 120
+
+    /** Room left in the model's context for its answer, and for the prompt's own wording. */
+    private const val PART_ANSWER = 600
+    private const val FINAL_ANSWER = 800
+    private const val PROMPT_OVERHEAD = 400
+
+    /** Null when the smart summary was saved; otherwise why not. */
+    private fun summarizeNow(context: Context, r: Request, onProgress: (String) -> Unit): String? {
+        val id = r.attachment.id
+        val stopped = { id in cancelledIds }
+        val transcript = Transcripts.load(context, id) ?: return "Transcribe the recording first"
+        if (transcript.text.isBlank()) return "There's no speech in this recording to summarise"
+        val model = SummaryModels.chosen(context)
+
+        if (!SummaryModels.isReady(context, model)) {
+            set(id, Job.Downloading(r.noteId, 0, "summary model"))
+            onProgress("Downloading the summary model")
+            val ok = SummaryModels.download(context, model, stopped) { pct ->
+                set(id, Job.Downloading(r.noteId, pct, "summary model"))
+                onProgress("Downloading the summary model · $pct%")
+            }
+            if (stopped()) return "Stopped"
+            if (!ok) return "Couldn't download the summary model. Check the internet connection and try again."
+        }
+        if (!Llm.available()) return "Smart summaries aren't available on this phone"
+        Whisper.loadBackends(context.applicationInfo.nativeLibraryDir)
+        set(id, Job.Summarizing(r.noteId, 0))
+        onProgress("Writing a summary · 0%")
+        val threads = Runtime.getRuntime().availableProcessors().let { if (it >= 8) 6 else (it - 1).coerceIn(2, 4) }
+        val h = Llm.open(SummaryModels.file(context, model).path, CONTEXT, threads)
+        if (h == 0L) {
+            SummaryModels.file(context, model).delete()
+            return "The summary model couldn't be opened. Try again to download it afresh."
+        }
+        try {
+            val count = { text: String -> Llm.countTokens(h, text) }
+            val budget = Llm.contextSize(h) - PART_ANSWER - PROMPT_OVERHEAD
+            val parts = SmartSummary.split(transcript, budget, count)
+            // Steps: each part, then each round of combining (usually one).
+            val steps = parts.size + (if (parts.size > 1) 1 else 0)
+            var step = 0
+            fun ask(prompt: String, max: Int): String? {
+                val out = Llm.generate(h, SmartSummary.SYSTEM, prompt, max, Whisper.Progress { pct ->
+                    val overall = ((step * 100 + pct) / steps).coerceIn(0, 99)
+                    if ((state.value[id] as? Job.Summarizing)?.percent != overall) {
+                        set(id, Job.Summarizing(r.noteId, overall))
+                        onProgress("Writing a summary · $overall%")
+                    }
+                }) ?: return null
+                step++
+                return String(out, Charsets.UTF_8)
+            }
+
+            var notes = parts.mapIndexed { i, part ->
+                ask(SmartSummary.partPrompt(part, i + 1, parts.size), if (parts.size == 1) FINAL_ANSWER else PART_ANSWER)
+                    ?: return if (stopped()) "Stopped" else "The summary model stopped part-way"
+            }
+            // Combine the parts' notes, in rounds if they don't all fit at once.
+            while (notes.size > 1) {
+                var groups = SmartSummary.group(notes, Llm.contextSize(h) - FINAL_ANSWER - PROMPT_OVERHEAD, count)
+                if (groups.size >= notes.size) groups = notes.chunked(2)
+                notes = groups.map { g ->
+                    if (g.size == 1) g[0] else ask(SmartSummary.combinePrompt(g), FINAL_ANSWER)
+                        ?: return if (stopped()) "Stopped" else "The summary model stopped part-way"
+                }
+            }
+            val smart = SmartSummary.parse(notes.single(), transcript)
+            if (smart.isEmpty) return "The summary model didn't give a usable answer. Try again, or a bigger model in Settings."
+            Transcripts.save(context, (Transcripts.load(context, id) ?: transcript).copy(smart = smart))
+            return null
+        } finally {
+            Llm.close(h)
+        }
+    }
+
+    /** How much text (in tokens) the summary model reads at once: about 15 minutes of speech. */
+    private const val CONTEXT = 6144
 }
 
 /** Keeps transcription going while Jotter is in the background, with its progress as a notification. */
@@ -459,7 +593,7 @@ private object Notifier {
     fun progress(context: Context, text: String) = NotificationCompat.Builder(context, CHANNEL.also { channel(context) })
         .setSmallIcon(R.drawable.ic_stat_jotter)
         .setColor(ContextCompat.getColor(context, R.color.brand))
-        .setContentTitle("Transcribing a recording")
+        .setContentTitle(if (text.startsWith("Writing") || text.contains("summary model")) "Summarising a recording" else "Transcribing a recording")
         .setContentText(text)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
@@ -475,12 +609,12 @@ private object Notifier {
         if (allowed(context)) runCatching { NotificationManagerCompat.from(context).notify(PROGRESS_ID, progress(context, text)) }
     }
 
-    fun done(context: Context, noteId: String) {
+    fun done(context: Context, noteId: String, summarized: Boolean) {
         if (!allowed(context)) return
         val n = NotificationCompat.Builder(context, CHANNEL.also { channel(context) })
             .setSmallIcon(R.drawable.ic_stat_jotter)
             .setColor(ContextCompat.getColor(context, R.color.brand))
-            .setContentTitle("Transcript and summary ready")
+            .setContentTitle(if (summarized) "Smart summary ready" else "Transcript and summary ready")
             .setContentText(Store.data.value.note(noteId)?.title?.ifBlank { null } ?: "Tap to open the note")
             .setAutoCancel(true)
             .setContentIntent(open(context, noteId))

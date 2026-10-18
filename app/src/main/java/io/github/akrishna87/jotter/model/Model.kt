@@ -196,6 +196,27 @@ enum class SpeechQuality(val label: String, val file: String, val sizeMb: Int) {
     ACCURATE("Accurate", "ggml-small-q5_1.bin", 190),
 }
 
+/**
+ * The language models that write smart summaries (Qwen2.5 Instruct, 4-bit), smallest first. Bigger
+ * ones write better summaries but need more memory and time.
+ */
+enum class SummaryModel(val label: String, val repo: String, val file: String, val sizeMb: Int, val minRamGb: Int) {
+    LITE("Lite", "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "qwen2.5-0.5b-instruct-q4_k_m.gguf", 400, 0),
+    STANDARD("Standard", "Qwen/Qwen2.5-1.5B-Instruct-GGUF", "qwen2.5-1.5b-instruct-q4_k_m.gguf", 1100, 5),
+    BEST("Best", "Qwen/Qwen2.5-3B-Instruct-GGUF", "qwen2.5-3b-instruct-q4_k_m.gguf", 2100, 7);
+
+    val sizeLabel: String get() = if (sizeMb >= 1000) "%.1f GB".format(sizeMb / 1000.0) else "$sizeMb MB"
+
+    companion object {
+        /** The biggest model a phone with [ramBytes] of memory runs comfortably. */
+        fun forRam(ramBytes: Long): SummaryModel {
+            // Phones sold as "8 GB" report a little less.
+            val gb = ramBytes / 1_000_000_000.0 + 0.5
+            return entries.last { gb >= it.minRamGb }
+        }
+    }
+}
+
 /** Languages recordings can be in; "auto" lets the speech model tell. */
 val SpeechLanguages: List<Pair<String, String>> = listOf(
     "auto" to "Detect automatically",
@@ -229,6 +250,8 @@ data class Settings(
     val speechLanguage: String = "auto",
     /** Write the transcript in English whatever language was spoken. */
     val speechTranslate: Boolean = false,
+    /** The model for smart summaries; null picks one for this phone's memory. */
+    val summaryModel: SummaryModel? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("theme", theme.name)
@@ -245,6 +268,7 @@ data class Settings(
         .put("speechQuality", speechQuality.name)
         .put("speechLanguage", speechLanguage)
         .put("speechTranslate", speechTranslate)
+        .put("summaryModel", summaryModel?.name ?: "")
 
     companion object {
         fun fromJson(o: JSONObject?): Settings {
@@ -265,6 +289,7 @@ data class Settings(
                 speechQuality = enumOr(o.optString("speechQuality"), d.speechQuality),
                 speechLanguage = o.optString("speechLanguage").ifBlank { d.speechLanguage },
                 speechTranslate = o.optBoolean("speechTranslate", d.speechTranslate),
+                summaryModel = SummaryModel.entries.firstOrNull { it.name == o.optString("summaryModel") },
             )
         }
     }

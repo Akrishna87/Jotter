@@ -44,6 +44,8 @@ jobs:
         with:
           name: Jotter-apk
           path: apk
+      - name: A voice for the test meeting
+        run: sudo apt-get update -q && sudo apt-get install -y -q espeak-ng
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

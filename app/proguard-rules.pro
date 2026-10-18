@@ -4,3 +4,4 @@
 -keep interface io.github.akrishna87.jotter.Whisper$Progress { *; }
 -keepclassmembers class * implements io.github.akrishna87.jotter.Whisper$Progress { void onProgress(int); }
 -keepclasseswithmembernames class io.github.akrishna87.jotter.Whisper { native <methods>; }
+-keepclasseswithmembernames class io.github.akrishna87.jotter.Llm { native <methods>; }

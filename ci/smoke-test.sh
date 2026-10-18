@@ -279,6 +279,40 @@ grep -q 'text="Summary"' "$OUT/rec-summary.xml" || fail "transcription failed: $
 shot 12-transcribed
 echo "PASS: transcription"
 
+echo "--- A spoken meeting: transcript, then a smart summary written on the phone"
+espeak-ng -s 140 -w "$OUT/meeting.wav" "Good morning everyone. Today we are planning the launch of the mobile app. \
+The main issue is that the marketing budget is too small for the launch in March. \
+After some discussion, we agreed to move fifty thousand dollars from design to marketing. \
+Priya, can you update the budget sheet by Friday? \
+I will send the revised launch plan to the whole team tomorrow. Thanks everyone."
+adb push "$OUT/meeting.wav" /sdcard/Music/meeting.wav > /dev/null
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Music/meeting.wav > /dev/null
+media_id=""
+for i in $(seq 1 15); do
+  media_id=$(adb shell content query --uri content://media/external/audio/media --projection _id --where "_display_name=\'meeting.wav\'" | grep -o '_id=[0-9]*' | head -1 | cut -d= -f2)
+  [ -n "$media_id" ] && break
+  sleep 2
+done
+[ -n "$media_id" ] || fail "the test recording didn't reach the media store"
+adb shell am start -a android.intent.action.SEND -t audio/wav --eu android.intent.extra.STREAM "content://media/external/audio/media/$media_id" --grant-read-uri-permission -n "$PKG/.MainActivity" > /dev/null
+wait_for shared-audio 'content-desc="Transcribe recording"' 20 "the shared recording didn't open as a note"
+tap shared-audio "Transcribe recording"
+wait_for meeting-quick 'content-desc="Make smart summary"|No speech was heard|Couldn' 600 "the meeting wasn't transcribed"
+grep -q 'content-desc="Make smart summary"' "$OUT/meeting-quick.xml" || fail "no speech was found in the spoken meeting"
+grep -qi 'budget' "$OUT/meeting-quick.xml" || fail "the quick summary doesn't mention the budget"
+shot 13-meeting-quick
+tap meeting-quick "Make smart summary"
+wait_for smart-download 'text="Download"' 10 "no prompt to download the summary model"
+grep -o 'The [A-Za-z]* model (picked for this phone)' "$OUT/smart-download.xml" || true
+tap smart-download "Download" last
+# The Lite model (about 400 MB) is downloaded and run on the emulator's CPU.
+wait_for smart 'text="Smart summary"|usable answer|Couldn|stopped part-way|t available' 1500 "no smart summary was written"
+grep -q 'text="Smart summary"' "$OUT/smart.xml" || fail "the smart summary failed: $(grep -o 'text="[^"]*\(usable\|Couldn\|stopped\|available\)[^"]*"' "$OUT/smart.xml" | head -1)"
+shot 14-smart-summary
+echo "Smart summary on screen:"
+grep -o 'text="[^"]*"' "$OUT/smart.xml" | sed -n '/Smart summary/,$p' | head -20
+echo "PASS: smart summary"
+
 # Only Jotter's own crashes count (the screen dump tool sometimes crashes on its own).
 if adb logcat -d | grep -A2 "FATAL EXCEPTION" | grep -q "Process: $PKG"; then
   adb logcat -d > "$OUT/logcat.txt"
