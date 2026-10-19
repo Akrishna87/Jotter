@@ -410,8 +410,25 @@ adb shell input keyevent KEYCODE_ENTER
 sleep 1
 adb shell input text "Bread"
 sleep 1
-# Select everything in the note's text (Ctrl+A).
-adb shell input keycombination 113 29
+# Select from "Milk" down to "Bread" the way a finger does: hold on the first word, then drag down
+# without letting go. (The page used to scroll instead of the selection growing.)
+hide_keyboard
+dump sel-typed
+read -r ex1 ey1 ex2 ey2 < <(python3 - "$OUT/sel-typed.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+for n in ET.parse(sys.argv[1]).iter("node"):
+    if n.get("content-desc") == "Note text":
+        print(*map(int, re.findall(r"\d+", n.get("bounds")))); break
+PY
+)
+lh=70 # one line of note text on the 420 dpi emulator
+adb shell input motionevent DOWN $((ex1 + 30)) $((ey1 + lh / 2))
+sleep 1.5
+adb shell input motionevent MOVE $((ex1 + 60)) $((ey1 + lh + lh / 2))
+sleep 0.3
+adb shell input motionevent MOVE $((ex1 + 140)) $((ey1 + 2 * lh + lh / 2))
+sleep 0.3
+adb shell input motionevent UP $((ex1 + 140)) $((ey1 + 2 * lh + lh / 2))
 sleep 1
 dump sel-all
 tap sel-all "Checklist"
@@ -430,22 +447,29 @@ echo "--- Press and hold to select and copy text while reading"
 dump sel-read
 xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Groceries" 2>/dev/null || true)
 [ -n "$xy" ] || fail "the note's title isn't on screen"
-# Hold on a word of the list (below the title) while the note is open for reading. The Copy bar is a
-# pop-up the screen dump can't see, so check that the word turns highlighted (selected) instead.
-xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Eggs") || fail "the list isn't shown for reading"
+# While reading: hold on "Milk" and drag down to "Bread" without letting go; "Bread" should turn
+# highlighted (selected). The Copy bar is a pop-up the screen dump can't see.
+xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Milk") || fail "the list isn't shown for reading"
+to=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Bread") || fail "the list isn't shown for reading"
 bounds=$(python3 - "$OUT/sel-read.xml" <<'PY'
 import sys, xml.etree.ElementTree as ET
 for n in ET.parse(sys.argv[1]).iter("node"):
-    if n.get("text") == "Eggs":
+    if n.get("text") == "Bread":
         print(n.get("bounds")); break
 PY
 )
 adb exec-out screencap > "$OUT/sel-before.raw"
-adb shell input swipe $xy $xy 1200
+adb shell input motionevent DOWN $xy
+sleep 1.5
+adb shell input motionevent MOVE $(echo $to | awk '{print $1, $2 - 30}')
+sleep 0.3
+adb shell input motionevent MOVE $to
+sleep 0.3
+adb shell input motionevent UP $to
 sleep 2
 adb exec-out screencap > "$OUT/sel-after.raw"
 shot 9f-selected-while-reading
-python3 - "$OUT/sel-before.raw" "$OUT/sel-after.raw" "$bounds" <<'PY' || fail "holding on the text didn't select it"
+python3 - "$OUT/sel-before.raw" "$OUT/sel-after.raw" "$bounds" <<'PY' || fail "holding and dragging over the text didn't select it"
 import re, struct, sys
 a, b = open(sys.argv[1], "rb").read(), open(sys.argv[2], "rb").read()
 w, h = struct.unpack("<II", a[:8])
@@ -457,7 +481,7 @@ for y in range(y1, y2):
         i = head + (y * w + x) * 4
         total += 1
         changed += a[i:i + 3] != b[i:i + 3]
-print(f"  {changed} of {total} pixels of the held word changed")
+print(f"  {changed} of {total} pixels of the last word dragged to changed")
 sys.exit(0 if changed > total // 4 else 1)
 PY
 # Back clears the selection first (when it does), then leaves the note.

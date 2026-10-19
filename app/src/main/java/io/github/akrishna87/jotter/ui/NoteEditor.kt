@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -322,7 +321,10 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
             }
         }
 
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        // While editing, the text box scrolls by itself and the page stays still: in a scrolling page,
+        // dragging a selection handle often scrolled the page instead of moving the handle.
+        val readScroll = rememberScrollState()
+        Column(Modifier.weight(1f).then(if (editing) Modifier else Modifier.verticalScroll(readScroll)).padding(horizontal = 20.dp)) {
             // Notebook, reminder and tags.
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MetaPill(Icons.Rounded.Book, data.notebook(notebookId).name, "Notebook: ${data.notebook(notebookId).name}") { notebookPicker = true }
@@ -361,7 +363,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     placeholder = "Start writing, or use the toolbar below",
                     description = "Note text",
                     style = styles.body,
-                    modifier = Modifier.defaultMinSize(minHeight = 240.dp).focusRequester(bodyFocus),
+                    modifier = Modifier.weight(1f).focusRequester(bodyFocus),
                 )
             } else {
                 MarkdownView(
@@ -380,6 +382,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                 )
             }
 
+            if (!editing) {
             if (start.source.isNotBlank()) {
                 Text(
                     styled(Markdown.inline("From " + start.source), marks()),
@@ -408,6 +411,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Write more") { editAtEnd(newLine = true) }
                     .semantics { contentDescription = "Write more" },
             )
+            }
         }
 
         if (editing) {
