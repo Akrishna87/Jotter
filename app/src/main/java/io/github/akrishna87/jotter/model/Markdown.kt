@@ -296,6 +296,45 @@ object Markdown {
         return newText to newCursor
     }
 
+    /**
+     * Gives every line the selection touches the marker [prefix] ("[ ] ", "- ", "1. ", "## ", "> "),
+     * or takes it away when they all have it already. Numbered lines count up from 1, blank lines
+     * are left as they are, and a line in another kind of list changes over. With nothing selected
+     * it works on the cursor's line. Returns the text and the selection, which covers the same lines.
+     */
+    fun toggleLinesPrefix(text: String, selStart: Int, selEnd: Int, prefix: String): Triple<String, Int, Int> {
+        val s = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val e = maxOf(selStart, selEnd).coerceIn(0, text.length)
+        if (s == e) {
+            val (t, c) = toggleLinePrefix(text, s, prefix)
+            return Triple(t, c, c)
+        }
+        val first = text.lastIndexOf('\n', s - 1) + 1
+        // A selection that ends at the very start of a line doesn't take that line in.
+        val endAt = if (text[e - 1] == '\n') e - 1 else e
+        val last = text.indexOf('\n', endAt).let { if (it < 0) text.length else it }
+        val lines = text.substring(first, last).split('\n')
+        val k = kind(prefix)
+        fun existing(line: String) = listPrefix(line).ifEmpty { headingRegex.find(line)?.let { line.substring(0, it.groupValues[1].length + 1) } ?: "" }
+        fun has(line: String) = existing(line).let { ex -> ex.isNotEmpty() && kind(ex.trimStart()) == k && (k != 'h' || ex == prefix) }
+        val written = lines.filter { it.isNotBlank() }
+        val remove = written.isNotEmpty() && written.all(::has)
+        var n = 0
+        val out = lines.joinToString("\n") { line ->
+            if (line.isBlank()) return@joinToString line
+            val ex = existing(line)
+            val indent = ex.takeWhile { it == ' ' || it == '\t' }
+            val rest = line.substring(ex.length)
+            if (remove) {
+                indent + rest
+            } else {
+                n++
+                (if (k in "cbn") indent else "") + (if (k == 'n') "$n. " else prefix) + rest
+            }
+        }
+        return Triple(text.substring(0, first) + out + text.substring(last), first, first + out.length)
+    }
+
     private fun kind(prefix: String): Char = when {
         prefix.contains('[') -> 'c'
         prefix.startsWith("#") -> 'h'

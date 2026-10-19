@@ -71,4 +71,39 @@ class MarkdownTest {
         assertEquals(Triple("a **b** c", 4, 5), Markdown.wrap("a b c", 2, 3, "**"))
         assertEquals(Triple("****", 2, 2), Markdown.wrap("", 0, 0, "**"))
     }
+
+    @Test
+    fun selectedLinesBecomeAList() {
+        val text = "Shopping\nMilk\nEggs\n\nBread\nDone"
+        val s = text.indexOf("Milk")
+        val e = text.indexOf("Bread") + 2 // part-way into the line still takes it in
+        val (checks, cs, ce) = Markdown.toggleLinesPrefix(text, s, e, "[ ] ")
+        assertEquals("Shopping\n[ ] Milk\n[ ] Eggs\n\n[ ] Bread\nDone", checks)
+        assertEquals("[ ] Milk\n[ ] Eggs\n\n[ ] Bread", checks.substring(cs, ce))
+        // A checklist turned into a numbered list counts up, skipping the blank line.
+        val (numbered, ns, ne) = Markdown.toggleLinesPrefix(checks, cs, ce, "1. ")
+        assertEquals("Shopping\n1. Milk\n2. Eggs\n\n3. Bread\nDone", numbered)
+        // Asking again for the kind they all have takes it away.
+        assertEquals(text, Markdown.toggleLinesPrefix(numbered, ns, ne, "1. ").first)
+    }
+
+    @Test
+    fun selectionEndingAtALineStartLeavesThatLine() {
+        val text = "one\ntwo\nthree"
+        val (t, _, _) = Markdown.toggleLinesPrefix(text, 0, text.indexOf("three"), "- ")
+        assertEquals("- one\n- two\nthree", t)
+    }
+
+    @Test
+    fun mixedLinesAllGetTheMarker() {
+        val (t, _, _) = Markdown.toggleLinesPrefix("[ ] a\nb\n  - c", 0, 13, "[ ] ")
+        assertEquals("[ ] a\n[ ] b\n  [ ] c", t)
+    }
+
+    @Test
+    fun noSelectionWorksOnTheCursorLine() {
+        val (t, s, e) = Markdown.toggleLinesPrefix("a\nb", 2, 2, "[ ] ")
+        assertEquals("a\n[ ] b", t)
+        assertEquals(s, e)
+    }
 }

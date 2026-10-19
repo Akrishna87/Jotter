@@ -394,6 +394,53 @@ tap sk-done "Browse" last
 sleep 1
 echo "PASS: sketch tools fit"
 
+echo "--- Selected lines become a checklist, then a numbered list"
+dump sel-start
+tap sel-start "New note" last
+wait_for sel-note 'content-desc="Note text"' 10 "the new note didn't open"
+sleep 1
+adb shell input text "Groceries"
+tap sel-note "Note text"
+sleep 1
+adb shell input text "Milk"
+adb shell input keyevent KEYCODE_ENTER
+sleep 1
+adb shell input text "Eggs"
+adb shell input keyevent KEYCODE_ENTER
+sleep 1
+adb shell input text "Bread"
+sleep 1
+# Select everything in the note's text (Ctrl+A).
+adb shell input keycombination 113 29
+sleep 1
+dump sel-all
+tap sel-all "Checklist"
+wait_for sel-checks 'Milk' 10 "the note's text went missing"
+grep -qF '[ ] Milk&#10;[ ] Eggs&#10;[ ] Bread' "$OUT/sel-checks.xml" || fail "the selected lines didn't all become checklist items: $(grep -o 'text="[^"]*Milk[^"]*"' "$OUT/sel-checks.xml" | head -1)"
+tap sel-checks "Numbered list"
+wait_for sel-numbers 'Milk' 10 "the note's text went missing"
+grep -qF '1. Milk&#10;2. Eggs&#10;3. Bread' "$OUT/sel-numbers.xml" || fail "the selected lines didn't become a numbered list: $(grep -o 'text="[^"]*Milk[^"]*"' "$OUT/sel-numbers.xml" | head -1)"
+shot 9e-selected-lines
+hide_keyboard
+tap sel-numbers "Done editing"
+sleep 1
+echo "PASS: selected lines to a list"
+
+echo "--- Press and hold to select and copy text while reading"
+dump sel-read
+xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Groceries" 2>/dev/null || true)
+[ -n "$xy" ] || fail "the note's title isn't on screen"
+# Hold on a word of the list (below the title) while the note is open for reading.
+xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Eggs") || fail "the list isn't shown for reading"
+adb shell input swipe $xy $xy 1200
+sleep 1
+wait_for sel-held 'text="Copy"|content-desc="Copy"' 10 "holding on the text didn't offer Copy"
+tap sel-held "Copy"
+sleep 1
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+echo "PASS: select and copy while reading"
+
 echo "--- Dark theme"
 dump before-settings
 tap before-settings "Settings"

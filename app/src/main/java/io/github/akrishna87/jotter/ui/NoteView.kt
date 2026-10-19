@@ -5,6 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
@@ -115,7 +117,8 @@ fun MarkdownView(
         return
     }
     fun text(s: String) = styled(Markdown.inline(s), m, onNoteLink)
-    Column {
+    // Press and hold to select words across the note and copy them; a tap still starts editing.
+    SelectionContainer { Column {
         for (b in blocks) {
             when (b) {
                 is Block.Heading -> Text(
@@ -172,14 +175,14 @@ fun MarkdownView(
                 is Block.Table -> TableView(b, styles, onEdit) { s -> text(s) }
                 is Block.Media -> {
                     val a = b.attachmentId?.let { id -> attachments.firstOrNull { it.id == id } }
-                    if (a != null) AttachmentView(a, onRemoveAttachment, noteId, onInsertText) else Text("📎 ${b.name}", edit.padding(vertical = 4.dp), style = styles.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (a != null) DisableSelection { AttachmentView(a, onRemoveAttachment, noteId, onInsertText) } else Text("📎 ${b.name}", edit.padding(vertical = 4.dp), style = styles.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 is Block.Paragraph -> Text(text(b.text), edit.padding(vertical = 2.dp), style = styles.body)
                 is Block.Divider -> HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 is Block.Blank -> Spacer(edit.height(10.dp))
             }
         }
-    }
+    } }
 }
 
 @Composable

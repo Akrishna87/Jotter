@@ -418,8 +418,9 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                 attacher = attacher,
                 selectedText = body.text.substring(body.selection.min.coerceIn(0, body.text.length), body.selection.max.coerceIn(0, body.text.length)),
                 onPrefix = { prefix ->
-                    val (text, cursor) = Markdown.toggleLinePrefix(body.text, body.selection.start, prefix)
-                    body = TextFieldValue(text, TextRange(cursor))
+                    // Every selected line becomes a checklist, bullet or numbered item (or stops being one).
+                    val (text, from, to) = Markdown.toggleLinesPrefix(body.text, body.selection.start, body.selection.end, prefix)
+                    body = TextFieldValue(text, TextRange(from, to))
                     runCatching { bodyFocus.requestFocus() }
                 },
                 onIndent = { by ->
