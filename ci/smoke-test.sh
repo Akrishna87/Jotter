@@ -319,7 +319,7 @@ width, height = int(sys.argv[2]), int(sys.argv[3])
 nums = list(map(int, re.findall(r"\d+", sys.argv[4])))
 # Nothing may sit under the navigation bar (its top edge; the screen's bottom if it wasn't found).
 bottom = nums[1] if len(nums) == 4 and nums[1] > height // 2 else height
-want = ["Pen colour black", "Pen colour brown", "Pen width 16", "Eraser"]
+want = ["Pen colour black", "Pen colour brown", "Pen size thin", "Pen size marker", "Eraser"]
 found = {n.get("content-desc"): n.get("bounds") for n in ET.parse(sys.argv[1]).iter("node") if n.get("content-desc") in want}
 for w in want:
     if w not in found:
@@ -328,6 +328,43 @@ for w in want:
     if x1 < 0 or x2 > width or x2 - x1 < 20 or y2 > bottom:
         sys.exit(f"{w} is cut off: {found[w]} on a {width}x{height} screen whose navigation buttons start at y={bottom}")
 print("sketch tools all on screen")
+PY
+echo "--- Pen sizes draw lines of different thickness"
+read -r px1 py1 px2 py2 < <(python3 - "$OUT/sketch.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+for n in ET.parse(sys.argv[1]).iter("node"):
+    if n.get("content-desc") == "Sketch pad":
+        print(*map(int, re.findall(r"\d+", n.get("bounds")))); break
+PY
+)
+thin_y=$((py1 + (py2 - py1) * 3 / 10)); thick_y=$((py1 + (py2 - py1) * 6 / 10))
+left=$((px1 + (px2 - px1) / 5)); right=$((px2 - (px2 - px1) / 5)); mid=$(((px1 + px2) / 2))
+tap sketch "Pen size thin"
+sleep 1
+adb shell input swipe $left $thin_y $right $thin_y 600
+sleep 1
+tap sketch "Pen size marker"
+sleep 1
+adb shell input swipe $left $thick_y $right $thick_y 600
+sleep 1
+shot 9d-pen-sizes
+adb exec-out screencap > "$OUT/pen-sizes.raw"
+python3 - "$OUT/pen-sizes.raw" "$mid" "$thin_y" "$thick_y" <<'PY' || fail "the pen sizes don't draw different thicknesses"
+import struct, sys
+data = open(sys.argv[1], "rb").read()
+w, h = struct.unpack("<II", data[:8])
+head = len(data) - w * h * 4
+x, ys = int(sys.argv[2]), [int(sys.argv[3]), int(sys.argv[4])]
+def thickness(y0):
+    # Dark pixels in the column through the line, near where it was drawn.
+    n = 0
+    for y in range(max(0, y0 - 90), min(h, y0 + 90)):
+        r, g, b = data[head + (y * w + x) * 4: head + (y * w + x) * 4 + 3]
+        n += r < 110 and g < 110 and b < 110
+    return n
+thin, thick = thickness(ys[0]), thickness(ys[1])
+print(f"  thin line {thin} px, marker line {thick} px")
+sys.exit(0 if thin >= 2 and thick >= 4 * thin else 1)
 PY
 dump sketch-2
 tap sketch-2 "Discard sketch"

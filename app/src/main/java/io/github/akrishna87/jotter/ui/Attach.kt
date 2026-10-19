@@ -75,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -246,7 +247,9 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
     val palette = listOf(Color(0xFF1F1B16), Color(0xFFC62828), Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFFF9A825), Color(0xFF6A1B9A), Color(0xFFEF6C00), Color(0xFF8D6E63))
     val paletteNames = listOf("black", "red", "blue", "green", "yellow", "purple", "orange", "brown")
     var color by remember { mutableStateOf(palette[0]) }
-    var width by remember { mutableFloatStateOf(6f) }
+    // Pen sizes in dp, so they look the same on every screen (pixels made them nearly alike on sharp ones).
+    val sizes = listOf(2f to "thin", 5f to "medium", 10f to "thick", 18f to "marker")
+    var width by remember { mutableFloatStateOf(5f) }
     var eraser by remember { mutableStateOf(false) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val paper = Color.White
@@ -299,11 +302,13 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
                         .onSizeChanged { size = it }
                         .semantics { contentDescription = "Sketch pad" }
                         .pointerInput(eraser, color, width) {
-                            detectTapGestures { pt -> strokes += PenStroke(if (eraser) paper else color, if (eraser) width * 4 else width, mutableListOf(pt)) }
+                            val px = width.dp.toPx() * if (eraser) 3 else 1
+                            detectTapGestures { pt -> strokes += PenStroke(if (eraser) paper else color, px, mutableListOf(pt)) }
                         }
                         .pointerInput(eraser, color, width) {
+                            val px = width.dp.toPx() * if (eraser) 3 else 1
                             detectDragGestures(
-                                onDragStart = { pt -> current = PenStroke(if (eraser) paper else color, if (eraser) width * 4 else width, mutableListOf(pt)).also { strokes += it } },
+                                onDragStart = { pt -> current = PenStroke(if (eraser) paper else color, px, mutableListOf(pt)).also { strokes += it } },
                                 onDragEnd = { current = null },
                                 onDragCancel = { current = null },
                             ) { change, _ ->
@@ -337,14 +342,15 @@ private fun SketchDialog(onDone: (Attachment?) -> Unit) {
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    for (w in listOf(4f, 8f, 16f)) {
+                    for ((w, name) in sizes) {
                         Box(
-                            Modifier.size(36.dp).clip(CircleShape)
+                            Modifier.size(40.dp).clip(CircleShape)
                                 .background(if (w == width) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                .border(if (w == width) 2.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                 .clickable { width = w }
-                                .semantics { contentDescription = "Pen width ${w.toInt()}" },
+                                .semantics { contentDescription = "Pen size $name"; selected = w == width },
                             contentAlignment = Alignment.Center,
-                        ) { Box(Modifier.size((w * 1.2f).dp.coerceAtMost(20.dp)).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)) }
+                        ) { Box(Modifier.size(w.dp.coerceAtLeast(3.dp)).clip(CircleShape).background(if (eraser) MaterialTheme.colorScheme.onSurface else color)) }
                     }
                     Box(Modifier.weight(1f))
                     FilledIconButton(onClick = { eraser = !eraser }, Modifier.semantics { contentDescription = if (eraser) "Pen" else "Eraser" }) {
