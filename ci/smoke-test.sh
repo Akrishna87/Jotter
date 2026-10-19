@@ -292,6 +292,20 @@ sleep 2
 scroll_until cl-reopened 'content-desc="Tick Buy milk"' 4 "the checklist was lost after the app was closed"
 echo "PASS: checklist saves itself"
 
+echo "--- Tapping the empty space under a note carries on writing"
+tap cl-reopened "Buy milk"
+wait_for wm-note 'content-desc="Write more"' 10 "the checklist note has no space to tap to write more"
+tap wm-note "Write more"
+sleep 2
+adb shell input text "Pay%sthe%sbills"
+sleep 1
+hide_keyboard
+wait_for wm-typed 'Pay the bills' 10 "tapping under the note didn't let me type"
+grep -qF 'Call the bank&#10;Pay the bills' "$OUT/wm-typed.xml" || fail "the new text wasn't put on a new line at the end"
+tap wm-typed "Back"
+sleep 1
+echo "PASS: tap below to write more"
+
 echo "--- The sketch pad's colours fit on screen"
 # Phones with the three navigation buttons hid the tools under them; test with those buttons.
 adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton || adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true

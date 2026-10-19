@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -156,6 +158,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     var info by remember { mutableStateOf(false) }
     var savingTemplate by remember { mutableStateOf(false) }
     var templatePicker by remember { mutableStateOf(false) }
+    var focusBody by remember { mutableStateOf(false) }
     val bodyFocus = remember { FocusRequester() }
     val titleFocus = remember { FocusRequester() }
     val styles = noteStyles(data.settings.textSize.scale)
@@ -186,6 +189,20 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
     }
     DisposableEffect(id) { onDispose { save() } }
 
+    // Starts editing with the cursor at the end of the text (on a new line when [newLine]), keyboard up.
+    fun editAtEnd(newLine: Boolean = false) {
+        val text = if (newLine && body.text.isNotBlank() && !body.text.endsWith("\n")) body.text + "\n" else body.text
+        body = TextFieldValue(text, TextRange(text.length))
+        editing = true
+        focusBody = true
+    }
+    LaunchedEffect(editing, focusBody) {
+        if (editing && focusBody) {
+            delay(50)
+            runCatching { bodyFocus.requestFocus() }
+            focusBody = false
+        }
+    }
     fun insertBlock(text: String) {
         val (t, c) = Markdown.insertBlock(body.text, if (editing) body.selection.end else body.text.length, text)
         body = TextFieldValue(t, TextRange(c))
@@ -245,7 +262,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                 TextButton(onClick = { editing = false; save() }, Modifier.semantics { contentDescription = "Done editing" }) { Text("Done") }
             } else {
                 IconButton(onClick = { attacher.audio() }, Modifier.semantics { contentDescription = "Record audio" }) { Icon(Icons.Rounded.Mic, null) }
-                IconButton(onClick = { editing = true }, Modifier.semantics { contentDescription = "Edit note" }) { Icon(Icons.Rounded.Edit, null) }
+                IconButton(onClick = { editAtEnd() }, Modifier.semantics { contentDescription = "Edit note" }) { Icon(Icons.Rounded.Edit, null) }
             }
             IconButton(onClick = { reminderDialog = true }, Modifier.semantics { contentDescription = if (reminderAt != null) "Change reminder" else "Add reminder" }) {
                 Icon(if (reminderAt != null && reminderDone == 0L) Icons.Rounded.Alarm else Icons.Outlined.Alarm, null, tint = if (reminderAt != null && reminderDone == 0L) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
@@ -352,7 +369,7 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     attachments,
                     styles,
                     onToggle = { line -> body = TextFieldValue(Markdown.toggleCheck(body.text, line)) },
-                    onEdit = { editing = true },
+                    onEdit = { editAtEnd() },
                     onNoteLink = { target ->
                         val linked = data.linked(target)
                         if (linked != null) { save(); nav.open(linked) } else actions.message("That note isn't here any more")
@@ -383,7 +400,14 @@ fun NoteEditorPage(page: Page.NotePage, data: Data) {
                     }
                 }
             }
-            Spacer(Modifier.height(32.dp))
+            // The empty space below the note: tapping it carries on writing at the end.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 320.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Write more") { editAtEnd(newLine = true) }
+                    .semantics { contentDescription = "Write more" },
+            )
         }
 
         if (editing) {
