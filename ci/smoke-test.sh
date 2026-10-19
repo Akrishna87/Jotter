@@ -430,14 +430,43 @@ echo "--- Press and hold to select and copy text while reading"
 dump sel-read
 xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Groceries" 2>/dev/null || true)
 [ -n "$xy" ] || fail "the note's title isn't on screen"
-# Hold on a word of the list (below the title) while the note is open for reading.
+# Hold on a word of the list (below the title) while the note is open for reading. The Copy bar is a
+# pop-up the screen dump can't see, so check that the word turns highlighted (selected) instead.
 xy=$(python3 "$HERE/find_text.py" "$OUT/sel-read.xml" "Eggs") || fail "the list isn't shown for reading"
+bounds=$(python3 - "$OUT/sel-read.xml" <<'PY'
+import sys, xml.etree.ElementTree as ET
+for n in ET.parse(sys.argv[1]).iter("node"):
+    if n.get("text") == "Eggs":
+        print(n.get("bounds")); break
+PY
+)
+adb exec-out screencap > "$OUT/sel-before.raw"
 adb shell input swipe $xy $xy 1200
-sleep 1
-wait_for sel-held 'text="Copy"|content-desc="Copy"' 10 "holding on the text didn't offer Copy"
-tap sel-held "Copy"
-sleep 1
+sleep 2
+adb exec-out screencap > "$OUT/sel-after.raw"
+shot 9f-selected-while-reading
+python3 - "$OUT/sel-before.raw" "$OUT/sel-after.raw" "$bounds" <<'PY' || fail "holding on the text didn't select it"
+import re, struct, sys
+a, b = open(sys.argv[1], "rb").read(), open(sys.argv[2], "rb").read()
+w, h = struct.unpack("<II", a[:8])
+head = len(a) - w * h * 4
+x1, y1, x2, y2 = map(int, re.findall(r"\d+", sys.argv[3]))
+changed = total = 0
+for y in range(y1, y2):
+    for x in range(x1, x2):
+        i = head + (y * w + x) * 4
+        total += 1
+        changed += a[i:i + 3] != b[i:i + 3]
+print(f"  {changed} of {total} pixels of the held word changed")
+sys.exit(0 if changed > total // 4 else 1)
+PY
+# Back clears the selection first (when it does), then leaves the note.
 adb shell input keyevent KEYCODE_BACK
+sleep 1
+dump sel-left
+if grep -q 'content-desc="Note options"' "$OUT/sel-left.xml"; then adb shell input keyevent KEYCODE_BACK; sleep 1; fi
+dump sel-tabs
+tap sel-tabs "Browse" last
 sleep 1
 echo "PASS: select and copy while reading"
 
